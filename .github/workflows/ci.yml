@@ -14,7 +14,7 @@ jobs:
       GOWORK: "off" # 按模块独立构建（与本地 Docker 构建一致）
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.22"
           cache-dependency-path: server/go.sum
@@ -31,7 +31,7 @@ jobs:
       GOWORK: "off"
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.22"
           cache-dependency-path: agent/go.sum
