@@ -1,0 +1,252 @@
+/* ===== Benchmarks replica page ===== */
+.benchmark-replica {
+  gap: 10px;
+}
+.benchmark-replica .console-page-header { margin-bottom: 2px; }
+.benchmark-replica .console-refresh.primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+/* 流程 ribbon */
+.benchmark-process-ribbon {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+.benchmark-process-step {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dfe7f2;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  min-height: 48px;
+  padding: 8px 10px;
+  position: relative;
+}
+.benchmark-process-step:not(:last-child)::after {
+  color: #bfdbfe;
+  content: "›";
+  font-size: 22px;
+  position: absolute;
+  right: -12px;
+  top: 11px;
+}
+.benchmark-process-step span {
+  align-items: center;
+  background: #f1f5f9;
+  border-radius: 999px;
+  color: #64748b;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+.benchmark-process-step strong { color: #0f172a; display: block; font-size: 13px; line-height: 1.2; }
+.benchmark-process-step small { color: #64748b; display: block; font-size: 11px; margin-top: 2px; }
+.benchmark-process-step.active {
+  background: #eff6ff;
+  border-color: #2563eb;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12);
+}
+.benchmark-process-step.active span { background: #2563eb; color: #ffffff; }
+
+.infra-kpi-grid.benchmark-kpi-strip {
+  gap: 10px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+/* 主面板：tabs + toolbar + 表格 + 分页 */
+.benchmark-main-panel { overflow: hidden; padding: 0; }
+.benchmark-tabs {
+  border-bottom: 1px solid #edf2f7;
+  display: flex;
+  gap: 2px;
+  padding: 10px 16px 0;
+}
+.benchmark-tabs button {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 12px;
+}
+.benchmark-tabs button.active { border-bottom-color: #2563eb; color: #2563eb; }
+
+.benchmark-toolbar {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 110px 110px 110px minmax(160px, 1fr) 88px 40px 116px;
+  padding: 10px 16px 0;
+}
+.benchmark-toolbar button,
+.benchmark-toolbar span,
+.benchmark-toolbar label,
+.benchmark-pagination button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #d8e0eb;
+  border-radius: 6px;
+  color: #334155;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+}
+.benchmark-toolbar span { color: #94a3b8; cursor: default; font-weight: 500; }
+.benchmark-search-box {
+  cursor: text;
+  font-weight: 500;
+}
+.benchmark-search-box input {
+  background: transparent;
+  border: 0;
+  color: #334155;
+  font-size: 12px;
+  min-width: 0;
+  outline: 0;
+  width: 100%;
+}
+.benchmark-toolbar .primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+  justify-content: center;
+}
+.benchmark-run-meta { color: #64748b; font-size: 11px; padding: 8px 16px 0; }
+
+/* 任务表格：桌面首屏内完整展示，避免样例图不应出现的横向滚动条。 */
+.benchmark-table { margin-top: 10px; min-width: 0; overflow: hidden; }
+.benchmark-table-row {
+  align-items: center;
+  border-top: 1px solid #edf2f7;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(140px, 1.35fr) minmax(88px, 0.82fr) minmax(82px, 0.78fr) 66px 66px 62px 54px 62px 54px 58px 72px 70px;
+  min-height: 42px;
+  min-width: 0;
+  padding: 6px 12px 6px 16px;
+}
+.benchmark-table-row.header {
+  background: #f8fafc;
+  border-top: 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 36px;
+}
+.benchmark-table-row span,
+.benchmark-table-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.benchmark-table-row strong { font-size: 12px; }
+.benchmark-name-cell { display: inline-flex; flex-direction: column; }
+.benchmark-name-cell strong { color: #2563eb; }
+.benchmark-name-cell small { color: #64748b; font-size: 10px; }
+.benchmark-table .success-text, .success-text { color: #16a34a; }
+.benchmark-table .warning-text, .warning-text { color: #ea580c; }
+.benchmark-table .danger-text, .danger-text { color: #dc2626; }
+.benchmark-row-actions { display: inline-flex; gap: 4px; }
+.benchmark-row-actions button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #d8e0eb;
+  border-radius: 6px;
+  color: #334155;
+  cursor: pointer;
+  display: inline-flex;
+  height: 22px;
+  justify-content: center;
+  width: 22px;
+}
+.benchmark-row-actions button:hover { border-color: #bfdbfe; color: #2563eb; }
+.benchmark-row-actions button svg {
+  color: #2563eb;
+  height: 13px;
+  stroke: #2563eb !important;
+  stroke-width: 2.2;
+  width: 13px;
+}
+.benchmark-pagination {
+  align-items: center;
+  border-top: 1px solid #edf2f7;
+  color: #64748b;
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 16px;
+}
+.benchmark-pagination button { height: 28px; justify-content: center; min-width: 28px; padding: 0 9px; }
+.benchmark-pagination button.active { background: #2563eb; border-color: #2563eb; color: #ffffff; }
+
+/* 底部：基准对比 + SLO 门禁 */
+.benchmark-bottom-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+}
+.benchmark-baseline-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 8px 0;
+}
+.benchmark-mini-chart {
+  border: 1px solid #e6edf6;
+  border-radius: 8px;
+  padding: 10px;
+}
+.benchmark-mini-chart header strong { font-size: 12px; }
+.benchmark-chart-layer { height: 74px; margin: 6px 0; position: relative; }
+.benchmark-chart-layer .infra-sparkline { height: 74px; left: 0; position: absolute; top: 0; width: 100%; }
+.benchmark-mini-chart em { font-size: 11px; font-style: normal; font-weight: 700; }
+.benchmark-mini-chart em.info { color: #2563eb; }
+.benchmark-mini-chart em.success { color: #16a34a; }
+.benchmark-mini-chart em.danger { color: #dc2626; }
+.benchmark-mini-chart em.warning { color: #ea580c; }
+
+.benchmark-gate-table { padding: 6px 0; }
+.benchmark-gate-row {
+  align-items: center;
+  border-top: 1px solid #f1f5f9;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1.4fr) 80px 80px 72px;
+  min-height: 38px;
+  padding: 6px 0;
+}
+.benchmark-gate-row.header { border-top: 0; color: #64748b; font-size: 12px; font-weight: 800; }
+.benchmark-gate-row strong { font-size: 12px; }
+.benchmark-gate-row span { color: #334155; font-size: 12px; }
+.benchmark-gate-result {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+  margin-top: 10px;
+  padding: 10px 12px;
+}
+.benchmark-gate-result strong { color: #166534; font-size: 12px; }
+.benchmark-gate-result p { color: #15803d; font-size: 11px; margin: 4px 0 0; }
+
+@media (max-width: 1500px) {
+  .benchmark-process-ribbon { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .infra-kpi-grid.benchmark-kpi-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .benchmark-bottom-grid { grid-template-columns: minmax(0, 1fr); }
+}

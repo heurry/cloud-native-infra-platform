@@ -1,0 +1,349 @@
+package httpx
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/heurry/cloudnative-infra-platform/server/internal/store"
+)
+
+const defaultOperator = "platform-admin"
+
+// decodeBody 解析可选 JSON body 到 v；空 body 不报错（对齐 Java @RequestBody(required=false)）。
+func decodeBody(r *http.Request, v any) error {
+	if r.Body == nil {
+		return nil
+	}
+	if err := json.NewDecoder(r.Body).Decode(v); err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	return nil
+}
+
+func orDefault(v, def string) string {
+	if v == "" {
+		return def
+	}
+	return v
+}
+
+// ===== 配置中心 /api/config =====
+
+func (a *API) configItems(w http.ResponseWriter, r *http.Request) {
+	rows, err := a.Store.ConfigItems(r.Context())
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"items": mapSlice(rows, toConfigItemDTO)})
+}
+
+func (a *API) configVersions(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	active, versions, err := a.Store.ConfigVersions(r.Context(), id)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{
+		"active_version": active,
+		"versions":       mapSlice(versions, toConfigVersionDTO),
+	})
+}
+
+type createConfigReq struct {
+	ConfigKey    string `json:"config_key"`
+	Env          string `json:"env"`
+	Namespace    string `json:"namespace"`
+	ConfigType   string `json:"config_type"`
+	Content      string `json:"content"`
+	ChangeReason string `json:"change_reason"`
+	Operator     string `json:"operator"`
+}
+
+func (a *API) createConfigItem(w http.ResponseWriter, r *http.Request) {
+	var req createConfigReq
+	if err := decodeBody(r, &req); err != nil {
+		a.badRequest(w, r, "invalid body")
+		return
+	}
+	if req.ConfigKey == "" {
+		a.badRequest(w, r, "config_key required")
+		return
+	}
+	operator := orDefault(req.Operator, defaultOperator)
+	env := orDefault(req.Env, "dev")
+	ns := orDefault(req.Namespace, "default")
+	id, err := a.Store.CreateConfigItem(r.Context(), env, ns, req.ConfigKey,
+		orDefault(req.ConfigType, "yaml"), req.Content, orDefault(req.ChangeReason, "初始化"), operator)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	a.Store.Audit(r.Context(), operator, "operator", "config.create", "config_item", req.ConfigKey,
+		map[string]any{"env": env, "namespace": ns, "version": 1})
+	WriteJSON(w, http.StatusOK, map[string]any{"id": id, "config_key": req.ConfigKey, "active_version": 1})
+}
+
+type publishConfigReq struct {
+	Content      string `json:"content"`
+	ChangeReason string `json:"change_reason"`
+	Operator     string `json:"operator"`
+}
+
+func (a *API) publishConfigVersion(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var req publishConfigReq
+	if err := decodeBody(r, &req); err != nil {
+		a.badRequest(w, r, "invalid body")
+		return
+	}
+	operator := orDefault(req.Operator, defaultOperator)
+	reason := orDefault(req.ChangeReason, "更新配置")
+	next, configKey, err := a.Store.PublishConfigVersion(r.Context(), id, req.Content, reason, operator)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	a.Store.Audit(r.Context(), operator, "operator", "config.publish", "config_item", configKey,
+		map[string]any{"version": next, "reason": reason})
+	WriteJSON(w, http.StatusOK, map[string]any{"id": id, "active_version": next})
+}
+
+type rollbackConfigReq struct {
+	Version  int32  `json:"version"`
+	Operator string `json:"operator"`
+}
+
+func (a *API) rollbackConfigVersion(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var req rollbackConfigReq
+	if err := decodeBody(r, &req); err != nil {
+		a.badRequest(w, r, "invalid body")
+		return
+	}
+	operator := orDefault(req.Operator, defaultOperator)
+	configKey, err := a.Store.RollbackConfigVersion(r.Context(), id, req.Version, operator)
+	if err != nil {
+		if errors.Is(err, store.ErrVersionNotFound) {
+			a.badRequest(w, r, "version not found")
+			return
+		}
+		a.fail(w, r, err)
+		return
+	}
+	a.Store.Audit(r.Context(), operator, "operator", "config.rollback", "config_item", configKey,
+		map[string]any{"rolled_back_to": req.Version})
+	WriteJSON(w, http.StatusOK, map[string]any{"id": id, "active_version": req.Version})
+}
+
+// ===== 发布流水线 /api/deployments =====
+
+func (a *API) deployments(w http.ResponseWriter, r *http.Request) {
+	rows, err := a.Store.Deployments(r.Context())
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"deployments": mapSlice(rows, toDeploymentDTO)})
+}
+
+type triggerDeployReq struct {
+	Name     string `json:"name"`
+	Version  string `json:"version"`
+	Env      string `json:"env"`
+	Operator string `json:"operator"`
+}
+
+func (a *API) triggerDeployment(w http.ResponseWriter, r *http.Request) {
+	var req triggerDeployReq
+	if err := decodeBody(r, &req); err != nil {
+		a.badRequest(w, r, "invalid body")
+		return
+	}
+	if req.Name == "" {
+		a.badRequest(w, r, "name required")
+		return
+	}
+	operator := orDefault(req.Operator, defaultOperator)
+	version := orDefault(req.Version, "latest")
+	env := orDefault(req.Env, "dev")
+	id, err := a.Store.CreateDeployment(r.Context(), req.Name, version, env, operator)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	a.Store.Audit(r.Context(), operator, "operator", "deployment.trigger", "deployment", req.Name,
+		map[string]any{"version": version, "env": env})
+	WriteJSON(w, http.StatusOK, map[string]any{"id": id, "name": req.Name, "status": "running"})
+}
+
+type finishDeployReq struct {
+	Status   string `json:"status"`
+	Operator string `json:"operator"`
+}
+
+func (a *API) finishDeployment(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var req finishDeployReq
+	if err := decodeBody(r, &req); err != nil {
+		a.badRequest(w, r, "invalid body")
+		return
+	}
+	status := orDefault(req.Status, "success")
+	if status != "success" && status != "failed" {
+		a.badRequest(w, r, "status must be success|failed")
+		return
+	}
+	operator := orDefault(req.Operator, defaultOperator)
+	key, err := a.Store.FinishDeployment(r.Context(), id, status)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	a.Store.Audit(r.Context(), operator, "operator", "deployment.finish", "deployment", key,
+		map[string]any{"status": status})
+	WriteJSON(w, http.StatusOK, map[string]any{"id": id, "status": status})
+}
+
+func (a *API) rollbackDeployment(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var req struct {
+		Operator string `json:"operator"`
+	}
+	if err := decodeBody(r, &req); err != nil {
+		a.badRequest(w, r, "invalid body")
+		return
+	}
+	operator := orDefault(req.Operator, defaultOperator)
+	newID, key, err := a.Store.RollbackDeployment(r.Context(), id, operator)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	a.Store.Audit(r.Context(), operator, "operator", "deployment.rollback", "deployment", key,
+		map[string]any{"from": id})
+	WriteJSON(w, http.StatusOK, map[string]any{"id": newID, "name": key, "status": "running", "rollback_of": id})
+}
+
+// ===== 故障事件 /api/incidents =====
+
+func (a *API) incidents(w http.ResponseWriter, r *http.Request) {
+	rows, err := a.Store.Incidents(r.Context(), r.URL.Query().Get("status"))
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"incidents": mapSlice(rows, toIncidentDTO)})
+}
+
+func (a *API) incidentDetail(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	inc, events, err := a.Store.IncidentDetail(r.Context(), id)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{
+		"incident": incidentDetailDTO(inc),
+		"events":   mapSlice(events, toIncidentEventDTO),
+	})
+}
+
+type createIncidentReq struct {
+	Title    string `json:"title"`
+	Severity string `json:"severity"`
+	Summary  string `json:"summary"`
+	Operator string `json:"operator"`
+}
+
+func (a *API) createIncident(w http.ResponseWriter, r *http.Request) {
+	var req createIncidentReq
+	if err := decodeBody(r, &req); err != nil {
+		a.badRequest(w, r, "invalid body")
+		return
+	}
+	if req.Title == "" {
+		a.badRequest(w, r, "title required")
+		return
+	}
+	operator := orDefault(req.Operator, defaultOperator)
+	severity := orDefault(req.Severity, "info")
+	id, err := a.Store.CreateIncident(r.Context(), req.Title, severity, req.Summary)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	a.Store.Audit(r.Context(), operator, "operator", "incident.create", "incident", id,
+		map[string]any{"severity": severity, "title": req.Title})
+	WriteJSON(w, http.StatusOK, map[string]any{"id": id, "status": "open"})
+}
+
+func (a *API) ackIncident(w http.ResponseWriter, r *http.Request) {
+	a.incidentTransition(w, r, "acknowledged", "incident.ack", a.Store.AckIncident)
+}
+
+func (a *API) resolveIncident(w http.ResponseWriter, r *http.Request) {
+	a.incidentTransition(w, r, "resolved", "incident.resolve", a.Store.ResolveIncident)
+}
+
+// incidentTransition 复用 ack/resolve 公共流程：解析 operator → 调 store → 审计 → 返回。
+func (a *API) incidentTransition(
+	w http.ResponseWriter, r *http.Request, newStatus, action string,
+	mutate func(ctx context.Context, id, operator string) error,
+) {
+	id := chi.URLParam(r, "id")
+	var req struct {
+		Operator string `json:"operator"`
+	}
+	if err := decodeBody(r, &req); err != nil {
+		a.badRequest(w, r, "invalid body")
+		return
+	}
+	operator := orDefault(req.Operator, defaultOperator)
+	if err := mutate(r.Context(), id, operator); err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	a.Store.Audit(r.Context(), operator, "operator", action, "incident", id, map[string]any{})
+	WriteJSON(w, http.StatusOK, map[string]any{"id": id, "status": newStatus})
+}
+
+// ===== 审计 /api/audit =====
+
+func (a *API) auditEvents(w http.ResponseWriter, r *http.Request) {
+	limit := clamp(queryInt(r, "limit", 50), 1, 500)
+	rows, err := a.Store.AuditEvents(r.Context(), r.URL.Query().Get("resourceType"), int32(limit))
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"events": mapSlice(rows, toAuditEventDTO)})
+}
+
+// ===== service-instance healthcheck =====
+
+func (a *API) serviceInstanceHealthcheck(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	ok, err := a.Store.ServiceInstanceHealthcheck(r.Context(), name)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	status := "missing"
+	if ok {
+		status = "unknown"
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{
+		"name": name, "status": status,
+		"detail": "healthcheck not yet implemented in Go control plane",
+	})
+}
+
+func (a *API) badRequest(w http.ResponseWriter, r *http.Request, msg string) {
+	WriteError(w, r, http.StatusBadRequest, "bad_request", msg)
+}

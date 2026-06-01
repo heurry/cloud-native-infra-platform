@@ -1,0 +1,8 @@
+// Go workspace：把节点采集器 agent/ 与控制面 server/ 纳入同一开发工作区。
+// 见 云原生平台/11-go迁移计划.md Phase 0。
+go 1.22.0
+
+use (
+	./agent
+	./server
+)

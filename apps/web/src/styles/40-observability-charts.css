@@ -1,0 +1,610 @@
+/* ============== Observability Trend Charts ============== */
+.observability-trend-panel {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+}
+
+.trend-chart-grid {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  padding: 4px 6px 6px;
+}
+
+.trend-chart-card {
+  background: #fbfdff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+}
+
+.trend-chart-card.tone-success { border-color: #bbf7d0; background: #f0fdf4; }
+.trend-chart-card.tone-warning { border-color: #fed7aa; background: #fff7ed; }
+.trend-chart-card.tone-danger { border-color: #fecaca; background: #fef2f2; }
+.trend-chart-card.tone-info { border-color: #bfdbfe; background: #eff6ff; }
+
+.trend-chart-head {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.trend-chart-head > span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.trend-chart-head strong {
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.trend-chart-head strong small {
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 500;
+  margin-left: 2px;
+}
+
+.trend-chart-card .infra-sparkline {
+  display: block;
+  width: 100%;
+}
+
+/* ============== Observability Mid Row (Route + GPU) ============== */
+.observability-mid-row {
+  display: grid !important;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+}
+
+.observability-mid-row > .infra-panel {
+  padding: 8px 10px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.route-bars.compact {
+  display: grid;
+  gap: 6px;
+  margin-top: 0;
+  padding: 4px 6px;
+}
+
+.route-bars.compact .route-row {
+  gap: 3px;
+}
+
+.route-bars.compact .route-row > div:first-child {
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 36px 30px;
+}
+
+.route-bars.compact .route-row span {
+  font-size: 11px;
+}
+
+.route-bars.compact .route-row strong,
+.route-bars.compact .route-row small {
+  font-size: 11px;
+}
+
+.route-bars.compact .route-track {
+  height: 5px;
+}
+
+.route-empty {
+  color: #94a3b8;
+  font-size: 11px;
+  padding: 16px;
+  text-align: center;
+}
+
+.gpu-card-grid.compact {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 0;
+  padding: 4px 6px;
+}
+
+.gpu-card-grid.compact .gpu-mini-card {
+  gap: 4px;
+  padding: 6px 8px;
+}
+
+.gpu-card-grid.compact .gpu-mini-head strong {
+  font-size: 12px;
+}
+
+.gpu-card-grid.compact .gpu-mini-head b {
+  font-size: 10px;
+  padding: 2px 5px;
+}
+
+.gpu-mini-meter {
+  display: grid;
+  gap: 3px;
+}
+
+.gpu-mini-meter span {
+  color: #64748b;
+  font-size: 10px;
+  text-align: right;
+}
+
+.gpu-mini-meter .route-track {
+  background: #e9eef3;
+  border-radius: 999px;
+  height: 5px;
+  overflow: hidden;
+}
+
+.gpu-mini-meter .route-track i {
+  background: #16a34a;
+  display: block;
+  height: 100%;
+}
+
+/* GPU metric line - utilization + memory */
+.gpu-metric-line {
+  display: grid;
+  gap: 3px;
+}
+
+.gpu-metric-label {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+}
+
+.gpu-metric-label span {
+  color: #64748b;
+  font-size: 10px;
+}
+
+.gpu-metric-label strong {
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.gpu-card-grid.compact .gpu-mini-card {
+  gap: 5px;
+}
+
+.gpu-card-grid.compact .gpu-mini-card .route-track {
+  background: #e9eef3;
+  border-radius: 999px;
+  height: 5px;
+  overflow: hidden;
+}
+
+.gpu-card-grid.compact .gpu-mini-card .route-track i {
+  display: block;
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+/* Trend refresh meta */
+.observability-trend-header {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 0 4px;
+}
+
+.trend-refresh-meta {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.trend-refresh-toggle {
+  align-items: center;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 999px;
+  color: #166534;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 600;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px;
+  transition: all 0.15s;
+}
+
+.trend-refresh-toggle:not(.active) {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  color: #64748b;
+}
+
+.trend-refresh-toggle:hover {
+  filter: brightness(0.97);
+}
+
+.trend-refresh-dot {
+  background: #94a3b8;
+  border-radius: 50%;
+  display: inline-block;
+  height: 6px;
+  width: 6px;
+}
+
+.trend-refresh-dot.live {
+  background: #16a34a;
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.18);
+  animation: pulse-live 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse-live {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.18); }
+  50% { box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.08); }
+}
+
+.trend-refresh-time {
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+/* ============================================================
+   统一反馈组件（§8.3）：Skeleton / Empty / Error / 通用 ghost-button
+   ============================================================ */
+
+/* 通用 ghost-button（之前仅在 workload-toolbar 作用域内定义） */
+.ghost-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #475569;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.ghost-button:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+/* 骨架屏 */
+.infra-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+.infra-skeleton-row {
+  height: 14px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #eef2f7 25%, #f6f8fb 37%, #eef2f7 63%);
+  background-size: 400% 100%;
+  animation: infra-skeleton-shimmer 1.3s ease infinite;
+}
+@keyframes infra-skeleton-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+/* 空状态 / 错误态共用容器 */
+.infra-feedback-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 16px;
+  text-align: center;
+  color: #64748b;
+}
+.infra-feedback-state strong {
+  font-size: 13px;
+  color: #334155;
+}
+.infra-feedback-state p {
+  font-size: 12px;
+  margin: 0;
+  max-width: 360px;
+}
+.infra-feedback-icon {
+  color: #94a3b8;
+}
+.infra-feedback-state.error .infra-feedback-icon {
+  color: #ea580c;
+}
+.infra-feedback-trace {
+  font-size: 10px;
+  color: #94a3b8;
+  font-family: ui-monospace, monospace;
+}
+
+/* ============================================================
+   通用右侧抽屉 Drawer（§8.7）
+   ============================================================ */
+.infra-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.32);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 60;
+  animation: infra-drawer-fade 0.15s ease;
+}
+@keyframes infra-drawer-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.infra-drawer {
+  width: 420px;
+  max-width: 92vw;
+  height: 100%;
+  background: #fff;
+  box-shadow: -8px 0 24px rgba(15, 23, 42, 0.12);
+  display: flex;
+  flex-direction: column;
+  animation: infra-drawer-slide 0.18s ease;
+}
+@keyframes infra-drawer-slide {
+  from { transform: translateX(24px); opacity: 0.6; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.infra-drawer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.infra-drawer-header strong {
+  font-size: 14px;
+  color: #0f172a;
+  display: block;
+}
+.infra-drawer-subtitle {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 2px;
+  display: block;
+  word-break: break-all;
+}
+.infra-drawer-close {
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+}
+.infra-drawer-close:hover {
+  background: #f1f5f9;
+}
+.infra-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.infra-drawer-footer {
+  padding: 12px 16px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.infra-drawer-field {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px dashed #eef2f7;
+  font-size: 12px;
+}
+.infra-drawer-field-label {
+  color: #64748b;
+  flex-shrink: 0;
+}
+.infra-drawer-field-value {
+  color: #0f172a;
+  font-weight: 500;
+  text-align: right;
+  word-break: break-all;
+}
+
+/* ============================================================
+   通用语义化表格 infra-table（可点击行 + 行操作）
+   ============================================================ */
+.infra-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.infra-table thead th {
+  text-align: left;
+  font-weight: 500;
+  color: #64748b;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+.infra-table tbody td {
+  padding: 9px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+  vertical-align: middle;
+}
+.infra-table tbody tr.clickable-row {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.infra-table tbody tr.clickable-row:hover {
+  background: #f8fafc;
+}
+.infra-table .cell-subtle {
+  display: block;
+  font-size: 10px;
+  color: #94a3b8;
+  margin-top: 2px;
+  word-break: break-all;
+}
+.infra-table .table-action-button {
+  padding: 3px 10px;
+  font-size: 11px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #fff;
+  color: #2563eb;
+  cursor: pointer;
+}
+.infra-table .table-action-button:hover:not(:disabled) {
+  background: #eff6ff;
+}
+.infra-table .table-action-button:disabled {
+  color: #94a3b8;
+  cursor: default;
+}
+
+/* 抽屉内分组标题 */
+.infra-drawer-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin: 12px 0 2px;
+}
+.infra-drawer-section-title:first-child {
+  margin-top: 0;
+}
+
+/* ============================================================
+   知识库 - 新建/更新文档表单
+   ============================================================ */
+.knowledge-doc-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+}
+.knowledge-doc-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+.knowledge-doc-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+}
+.knowledge-doc-form input,
+.knowledge-doc-form textarea {
+  font-size: 12px;
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #0f172a;
+  font-family: inherit;
+}
+.knowledge-doc-form input:focus,
+.knowledge-doc-form textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+}
+.knowledge-doc-form-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.knowledge-doc-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ============================================================
+   可观测性 - 请求追踪面板（时间窗/过滤 + 异常行）
+   ============================================================ */
+.trace-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.trace-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.trace-filters select {
+  font-size: 11px;
+  padding: 4px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #334155;
+  cursor: pointer;
+}
+.trace-filter-count {
+  font-size: 11px;
+  color: #94a3b8;
+}
+.request-trace-table .trace-row-abnormal {
+  background: #fff7ed;
+}
+.request-trace-table .trace-row-abnormal:hover {
+  background: #ffedd5;
+}
+.trace-status {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.trace-status.ok {
+  color: #166534;
+  background: #dcfce7;
+}
+.trace-status.abnormal {
+  color: #9a3412;
+  background: #ffedd5;
+}
+
+/* 表格行内操作组（多个按钮并排） */
+.table-action-group {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.infra-table .table-action-button.ghost {
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.infra-table .table-action-button.ghost:hover {
+  background: #f1f5f9;
+}

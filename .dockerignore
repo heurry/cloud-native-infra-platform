@@ -1,0 +1,12 @@
+# 仅 legacy-python.Dockerfile 使用仓库根作为构建上下文；排除大目录避免上下文膨胀。
+runs/
+model/
+node_modules/
+apps/web/node_modules/
+apps/web/dist/
+.git/
+screenshots/
+**/__pycache__/
+**/*.pyc
+*.log
+.secrets/

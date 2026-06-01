@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: qwen35-4b-model-store
+spec:
+  capacity:
+    storage: 40Gi
+  accessModes:
+    - ReadOnlyMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: qwen35-4b-model-store
+  hostPath:
+    path: /home/xdu/LLM/llm_train_platform_miniv2/model/Qwen3.5-4B
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: qwen35-4b-model-store
+spec:
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 40Gi
+  storageClassName: qwen35-4b-model-store
+  volumeName: qwen35-4b-model-store

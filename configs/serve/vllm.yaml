@@ -1,0 +1,10 @@
+model: model/Qwen3.5-4B
+tensor_parallel_size: 1
+dtype: float16
+max_model_len: 4096
+gpu_memory_utilization: 0.90
+trust_remote_code: true
+served_model_name: qwen3-4b-customer
+host: 0.0.0.0
+port: 8000
+api_key: EMPTY

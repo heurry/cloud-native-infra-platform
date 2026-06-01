@@ -1,0 +1,45 @@
+{{- if .Values.legacyPython.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cip.fullname" . }}-legacy-python
+  labels:
+    {{- include "cip.labels" . | nindent 4 }}
+spec:
+  ports:
+    - port: {{ .Values.legacyPython.service.port }}
+      targetPort: 8088
+  selector:
+    {{- include "cip.selectorLabels" (dict "root" . "component" "legacy-python") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cip.fullname" . }}-legacy-python
+  labels:
+    {{- include "cip.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.legacyPython.replicas }}
+  selector:
+    matchLabels:
+      {{- include "cip.selectorLabels" (dict "root" . "component" "legacy-python") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cip.selectorLabels" (dict "root" . "component" "legacy-python") | nindent 8 }}
+    spec:
+      containers:
+        - name: legacy-python
+          image: "{{ .Values.legacyPython.image.repository }}:{{ .Values.legacyPython.image.tag }}"
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - containerPort: 8088
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8088
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.legacyPython.resources | nindent 12 }}
+{{- end }}

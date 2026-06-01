@@ -1,0 +1,20 @@
+gateway:
+  endpoint_label: aibrix-qwen3-4b
+  base_url: http://127.0.0.1:8010/v1
+  model: qwen3-4b-customer
+  tokenizer_path: model/Qwen3.5-4B
+  request_headers:
+    routing-strategy: least-request
+    user: ""
+  target_pod_headers:
+    - target-pod
+    - x-target-pod
+    - x-aibrix-target-pod
+    - x-envoy-upstream-host
+benchmark:
+  concurrency_levels: [1, 2, 4, 8, 16, 32, 64]
+  requests_per_level: 64
+  prompt_profile: mixed
+  max_tokens: 256
+  output_json: runs/serve/qwen3_4b_aibrix_gateway_benchmark.json
+  output_report: runs/serve/qwen3_4b_aibrix_gateway_benchmark.md

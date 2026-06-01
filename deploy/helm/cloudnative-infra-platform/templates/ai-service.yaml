@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cip.fullname" . }}-ai-service
+  labels:
+    {{- include "cip.labels" . | nindent 4 }}
+spec:
+  ports:
+    - port: {{ .Values.aiService.service.port }}
+      targetPort: 8200
+  selector:
+    {{- include "cip.selectorLabels" (dict "root" . "component" "ai-service") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cip.fullname" . }}-ai-service
+  labels:
+    {{- include "cip.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.aiService.replicas }}
+  selector:
+    matchLabels:
+      {{- include "cip.selectorLabels" (dict "root" . "component" "ai-service") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cip.selectorLabels" (dict "root" . "component" "ai-service") | nindent 8 }}
+    spec:
+      containers:
+        - name: ai-service
+          image: "{{ .Values.aiService.image.repository }}:{{ .Values.aiService.image.tag }}"
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - containerPort: 8200
+          env:
+            {{- range $k, $v := .Values.aiService.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /internal/health
+              port: 8200
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /internal/health
+              port: 8200
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.aiService.resources | nindent 12 }}

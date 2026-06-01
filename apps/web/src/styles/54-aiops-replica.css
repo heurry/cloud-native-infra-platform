@@ -1,0 +1,657 @@
+/* ===== AI Ops replica page ===== */
+.aiops-replica {
+  display: grid;
+  gap: 10px;
+}
+
+.aiops-replica .console-page-header {
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.aiops-replica .console-page-heading h1 {
+  color: #0f172a;
+  font-size: 22px;
+}
+
+.aiops-replica .console-page-heading p {
+  color: #64748b;
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+.aiops-replica .infra-panel,
+.aiops-replica .infra-kpi-card {
+  border-color: #dfe6f1;
+  border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.03);
+}
+
+.aiops-replica .infra-panel {
+  padding: 12px 14px;
+}
+
+.aiops-replica .infra-panel-header {
+  margin-bottom: 8px;
+}
+
+.aiops-replica .infra-panel-header h2 {
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.aiops-process-ribbon {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.aiops-process-ribbon > div {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dfe6f1;
+  border-radius: 8px;
+  display: grid;
+  gap: 3px;
+  grid-template-columns: 30px minmax(0, 1fr);
+  min-height: 44px;
+  padding: 7px 9px;
+}
+
+.aiops-process-ribbon span {
+  align-items: center;
+  background: #f8fafc;
+  border-radius: 999px;
+  color: #64748b;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 800;
+  grid-row: span 2;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.aiops-process-ribbon strong {
+  color: #0f172a;
+  font-size: 12px;
+}
+
+.aiops-process-ribbon small {
+  color: #64748b;
+  font-size: 10px;
+}
+
+.aiops-process-ribbon .active {
+  border-color: #2563eb;
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.08);
+}
+
+.aiops-process-ribbon .active span {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.infra-kpi-grid.aiops-kpi-strip {
+  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.aiops-replica .infra-kpi-card {
+  min-height: 82px;
+  padding: 11px 12px;
+}
+
+.aiops-replica .infra-kpi-card strong {
+  font-size: 22px;
+  white-space: nowrap;
+}
+
+.aiops-context-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.aiops-context-card {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e6edf6;
+  border-radius: 8px;
+  display: flex;
+  gap: 10px;
+  min-height: 54px;
+  padding: 10px;
+}
+
+.aiops-context-card > svg {
+  background: #eff6ff;
+  border-radius: 7px;
+  color: #2563eb;
+  flex: 0 0 auto;
+  height: 28px;
+  padding: 6px;
+  width: 28px;
+}
+
+.aiops-context-card span {
+  color: #64748b;
+  display: block;
+  font-size: 11px;
+}
+
+.aiops-context-card strong {
+  color: #0f172a;
+  display: block;
+  font-size: 13px;
+  margin-top: 2px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aiops-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.aiops-toolbar button,
+.aiops-toolbar span {
+  background: #ffffff;
+  border: 1px solid #d8e0eb;
+  border-radius: 6px;
+  color: #334155;
+  font-size: 12px;
+  height: 30px;
+  padding: 0 12px;
+}
+
+.aiops-toolbar span {
+  align-items: center;
+  color: #94a3b8;
+  display: inline-flex;
+  min-width: 260px;
+}
+
+.aiops-incident-table {
+  border: 1px solid #e6edf6;
+  border-radius: 8px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.aiops-incident-row {
+  align-items: center;
+  border-top: 1px solid #edf2f7;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 70px 62px minmax(150px, 1fr) 110px minmax(130px, 1fr) 58px 70px 70px 64px;
+  min-height: 36px;
+  padding: 5px 10px;
+}
+
+.aiops-incident-row:first-child {
+  border-top: 0;
+}
+
+.aiops-incident-row.header {
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.aiops-incident-row strong,
+.aiops-incident-row span {
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aiops-row-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.aiops-row-actions button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #d8e0eb;
+  border-radius: 6px;
+  color: #2563eb;
+  cursor: pointer;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.aiops-bottom-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1.15fr) minmax(380px, 0.85fr);
+}
+
+.aiops-root-cause {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #b91c1c;
+  padding: 10px 12px;
+}
+
+.aiops-root-cause strong {
+  display: block;
+  font-size: 13px;
+}
+
+.aiops-root-cause p {
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 5px 0 0;
+}
+
+.aiops-evidence-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.aiops-evidence-list > strong {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.aiops-evidence-list span {
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.aiops-evidence-list span::before {
+  color: #16a34a;
+  content: "●";
+  font-size: 10px;
+  margin-right: 7px;
+}
+
+.aiops-resource-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.aiops-resource-chips span {
+  background: #eff6ff;
+  border-radius: 999px;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 8px;
+}
+
+.aiops-action-list {
+  border: 1px solid #e6edf6;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.aiops-action-row {
+  align-items: center;
+  border-top: 1px solid #edf2f7;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 28px minmax(0, 1fr) 88px;
+  min-height: 58px;
+  padding: 8px 10px;
+}
+
+.aiops-action-row:first-child {
+  border-top: 0;
+}
+
+.aiops-action-row > span {
+  align-items: center;
+  background: #2563eb;
+  border-radius: 999px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.aiops-action-row strong {
+  color: #0f172a;
+  display: block;
+  font-size: 13px;
+}
+
+.aiops-action-row small {
+  color: #64748b;
+  display: block;
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.aiops-action-row button {
+  background: #2563eb;
+  border: 0;
+  border-radius: 6px;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  height: 30px;
+}
+
+.infra-copilot.aiops-copilot.aiops-replica-copilot {
+  background: #ffffff;
+  border-left-color: #dfe6f1;
+  gap: 10px;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  overflow: hidden;
+  padding: 14px 16px;
+}
+
+.aiops-copilot-titlebar > strong {
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.copilot-online-dot.degraded {
+  background: #f59e0b;
+  box-shadow: 0 0 0 3px #ffedd5;
+}
+
+.aiops-copilot-scroll {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.aiops-copilot-alert-card {
+  align-items: flex-start;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  color: #ea580c;
+  display: flex;
+  gap: 9px;
+  padding: 12px;
+}
+
+.aiops-copilot-alert-card.danger {
+  background: #fff7f7;
+  border-color: #fecaca;
+  color: #dc2626;
+}
+
+.aiops-copilot-alert-card strong,
+.aiops-copilot-alert-card span {
+  display: block;
+}
+
+.aiops-copilot-alert-card strong {
+  font-size: 13px;
+}
+
+.aiops-copilot-alert-card span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+  margin-top: 4px;
+}
+
+.aiops-copilot-alert-card button {
+  background: #ffffff;
+  border: 1px solid #d8e0eb;
+  border-radius: 6px;
+  color: #334155;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  height: 28px;
+  margin-top: 8px;
+  padding: 0 12px;
+}
+
+.aiops-copilot-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.aiops-copilot-card header {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.aiops-copilot-card > strong {
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.aiops-copilot-card p {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.aiops-copilot-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.aiops-copilot-pills span {
+  background: #dcfce7;
+  border-radius: 999px;
+  color: #16a34a;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 8px;
+}
+
+.aiops-copilot-card dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.aiops-copilot-card dl div {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.aiops-copilot-card dt {
+  color: #64748b;
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+
+.aiops-copilot-card dd {
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aiops-copilot-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.aiops-copilot-evidence span {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+}
+
+.aiops-copilot-link {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #2563eb;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 6px;
+  justify-content: center;
+}
+
+.aiops-copilot-actions-grid {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.aiops-copilot-actions-grid button {
+  background: #ffffff;
+  border: 1px solid #d8e0eb;
+  border-radius: 8px;
+  color: #334155;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  height: 34px;
+  min-width: 0;
+}
+
+.aiops-copilot-actions-grid button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.aiops-copilot-action-list {
+  display: grid;
+  gap: 7px;
+}
+
+.aiops-copilot-action-list button {
+  align-items: start;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #334155;
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  min-width: 0;
+  padding: 9px;
+  text-align: left;
+}
+
+.aiops-copilot-action-list button svg {
+  color: #16a34a;
+  margin-top: 2px;
+}
+
+.aiops-copilot-action-list strong,
+.aiops-copilot-action-list small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.aiops-copilot-action-list strong {
+  color: #0f172a;
+  font-size: 13px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.aiops-copilot-action-list small {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.aiops-copilot-input {
+  display: flex;
+  margin-top: auto;
+  min-height: 40px;
+}
+
+.aiops-copilot-input input {
+  flex: 1 1 auto;
+  min-width: 0;
+  outline: 0;
+}
+
+.aiops-copilot-input button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #64748b;
+  cursor: pointer;
+  display: inline-flex;
+  height: 28px;
+  justify-content: center;
+  padding: 0;
+  width: 28px;
+}
+
+.aiops-copilot-input button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@media (max-width: 1500px) {
+  .aiops-process-ribbon {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .infra-kpi-grid.aiops-kpi-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .aiops-context-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .aiops-incident-panel {
+    overflow-x: auto;
+  }
+
+  .aiops-incident-table {
+    min-width: 980px;
+  }
+
+  .aiops-bottom-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

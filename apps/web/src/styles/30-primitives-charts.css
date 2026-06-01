@@ -1,0 +1,555 @@
+/* ----------------- Closed-loop Ribbon v2 -------------------
+   6-step AI-Ops closed loop with chevron flow connectors + a
+   prominent active step. Per design spec §8 and reference UI.
+   ---------------------------------------------------------- */
+.closed-loop-ribbon {
+  align-items: stretch;
+  background: var(--tw-neutral-50);
+  border: 1px solid var(--tw-neutral-200);
+  border-radius: 6px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 6px 8px;
+}
+
+.closed-loop-track {
+  align-items: stretch;
+  display: grid;
+  gap: 0;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+}
+
+.closed-loop-cell {
+  align-items: stretch;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) 18px;
+  min-width: 0;
+}
+
+.closed-loop-cell:last-child {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.closed-loop-arrow {
+  align-items: center;
+  color: var(--tw-neutral-300);
+  display: inline-flex;
+  justify-content: center;
+}
+
+.closed-loop-stage {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--tw-neutral-200);
+  border-radius: 6px;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 22px minmax(0, 1fr);
+  min-height: 42px;
+  min-width: 0;
+  padding: 5px 7px;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.closed-loop-stage strong {
+  color: var(--tw-neutral-900);
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.closed-loop-stage small {
+  color: var(--tw-neutral-500);
+  display: block;
+  font-size: 10px;
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.closed-loop-index {
+  align-items: center;
+  background: var(--tw-neutral-100);
+  border-radius: 999px;
+  color: var(--tw-neutral-500);
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 700;
+  height: 20px;
+  justify-content: center;
+  width: 20px;
+}
+
+.closed-loop-stage.done .closed-loop-index {
+  background: var(--tw-success-100);
+  color: var(--tw-success-700);
+}
+
+.closed-loop-stage.done {
+  border-color: var(--tw-success-300);
+}
+
+.closed-loop-stage.active {
+  background: var(--tw-info-50);
+  border-color: var(--tw-info-500);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.16);
+  transform: scale(1.04);
+  z-index: 1;
+}
+
+.closed-loop-stage.active .closed-loop-index {
+  background: var(--tw-info-500);
+  color: #fff;
+  font-size: 12px;
+  height: 28px;
+  width: 28px;
+}
+
+.closed-loop-stage.active strong {
+  color: var(--tw-info-700);
+}
+
+.closed-loop-action {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--tw-neutral-200);
+  border-radius: 6px;
+  color: var(--tw-info-700);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.closed-loop-action:hover {
+  border-color: var(--tw-info-300);
+  background: var(--tw-info-50);
+}
+
+@media (max-width: 1280px) {
+  .closed-loop-stage small {
+    display: none;
+  }
+}
+
+@media (max-width: 1180px) {
+  .closed-loop-track {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .closed-loop-cell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .closed-loop-arrow {
+    display: none;
+  }
+}
+
+/* ----------------- Sparkline / Donut / Dot breakdown -------------------
+   Tiny SVG primitives used inside KPI cards. */
+.infra-sparkline {
+  display: block;
+  flex-shrink: 0;
+}
+
+.infra-donut {
+  align-items: center;
+  display: inline-flex;
+  flex-shrink: 0;
+  justify-content: center;
+  position: relative;
+}
+
+.infra-donut-label {
+  color: var(--tw-neutral-900);
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+  position: absolute;
+}
+
+.infra-status-dot-list {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.infra-status-dot {
+  align-items: center;
+  color: var(--tw-neutral-500);
+  display: inline-flex;
+  font-size: 11px;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.infra-status-dot > i {
+  background: var(--tw-neutral-500);
+  border-radius: 999px;
+  display: inline-block;
+  height: 7px;
+  width: 7px;
+}
+
+.infra-status-dot > strong {
+  color: var(--tw-neutral-900);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.infra-status-dot > small {
+  font-size: 11px;
+}
+
+.infra-status-dot.success > i { background: var(--tw-success-500); }
+.infra-status-dot.warning > i { background: var(--tw-warn-500); }
+.infra-status-dot.danger > i  { background: var(--tw-danger-500); }
+.infra-status-dot.info > i    { background: var(--tw-info-500); }
+.infra-status-dot.ai > i      { background: var(--tw-ai-500); }
+
+/* ----------------- KPI card with chart -------------------
+   Target height 96-104px so 5 cards fit on a row in <120px. */
+.kpi-chart-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.kpi-chart-grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.kpi-chart-grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+.kpi-chart-card {
+  background: #ffffff;
+  border: 1px solid var(--tw-neutral-200);
+  border-radius: 8px;
+  cursor: default;
+  display: grid;
+  font: inherit;
+  gap: 4px;
+  grid-template-rows: auto 1fr auto;
+  min-height: 96px;
+  min-width: 0;
+  padding: 10px 12px;
+  text-align: left;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+button.kpi-chart-card {
+  color: inherit;
+  cursor: pointer;
+}
+
+button.kpi-chart-card:hover {
+  border-color: var(--tw-info-300);
+  box-shadow: 0 8px 22px rgba(37, 99, 235, 0.08);
+  transform: translateY(-1px);
+}
+
+.kpi-chart-card-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.kpi-chart-card-label {
+  align-items: center;
+  color: var(--tw-neutral-500);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kpi-chart-card-value {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+}
+
+.kpi-chart-card-value strong {
+  color: var(--tw-neutral-900);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+
+.kpi-chart-card-delta {
+  align-items: center;
+  border-radius: 4px;
+  color: var(--tw-neutral-500);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 600;
+  gap: 2px;
+  padding: 1px 5px;
+}
+
+.kpi-chart-card-delta.up.warning,
+.kpi-chart-card-delta.up.danger { color: var(--tw-danger-700); background: var(--tw-danger-100); }
+.kpi-chart-card-delta.up.success { color: var(--tw-success-700); background: var(--tw-success-100); }
+.kpi-chart-card-delta.down.success { color: var(--tw-success-700); background: var(--tw-success-100); }
+.kpi-chart-card-delta.down.warning,
+.kpi-chart-card-delta.down.danger { color: var(--tw-warn-700); background: var(--tw-warn-100); }
+
+.kpi-chart-card-foot {
+  align-items: center;
+  color: var(--tw-neutral-500);
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+}
+
+.kpi-chart-card-foot small {
+  color: var(--tw-neutral-500);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Tone modifiers add a colored left rail without changing fill (per §3). */
+.kpi-chart-card.tone-success { border-color: var(--tw-success-300); box-shadow: inset 3px 0 0 var(--tw-success-500); }
+.kpi-chart-card.tone-warning { border-color: var(--tw-warn-300); box-shadow: inset 3px 0 0 var(--tw-warn-500); }
+.kpi-chart-card.tone-danger  { border-color: var(--tw-danger-300); box-shadow: inset 3px 0 0 var(--tw-danger-500); }
+.kpi-chart-card.tone-ai      { background: var(--tw-ai-50); border-color: var(--tw-ai-300); box-shadow: inset 3px 0 0 var(--tw-ai-500); }
+.kpi-chart-card.tone-info    { border-color: var(--tw-info-300); box-shadow: inset 3px 0 0 var(--tw-info-500); }
+
+/* ----------------- DiagnosticGrid + SubPanel -------------------
+   Multi-column aggregated diagnostic layout (Events / charts /
+   pressure bars / SLO impact side-by-side). */
+.diagnostic-grid {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+}
+
+.diagnostic-grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.diagnostic-grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.diagnostic-grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.sub-panel {
+  background: var(--tw-neutral-50);
+  border: 1px solid var(--tw-neutral-200);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.sub-panel > header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  min-height: 22px;
+}
+
+.sub-panel > header h3 {
+  color: var(--tw-neutral-900);
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.sub-panel > header span {
+  color: var(--tw-neutral-500);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.sub-panel-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.sub-panel.tone-warning { border-color: var(--tw-warn-300); box-shadow: inset 3px 0 0 var(--tw-warn-500); }
+.sub-panel.tone-danger  { border-color: var(--tw-danger-300); box-shadow: inset 3px 0 0 var(--tw-danger-500); }
+.sub-panel.tone-success { border-color: var(--tw-success-300); box-shadow: inset 3px 0 0 var(--tw-success-500); }
+.sub-panel.tone-ai      { background: var(--tw-ai-50); border-color: var(--tw-ai-300); box-shadow: inset 3px 0 0 var(--tw-ai-500); }
+
+@media (max-width: 1280px) {
+  .diagnostic-grid.cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ----------------- Priority Action Card (Copilot) -------------------
+   Numbered priority badge + title + "推荐" chip + 2-line description
+   + meta (risk/ETA) + own primary button. Used in Copilot column. */
+.priority-action-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.priority-action-card {
+  background: #fff;
+  border: 1px solid var(--tw-neutral-200);
+  border-radius: 8px;
+  display: grid;
+  gap: 7px;
+  padding: 11px 12px;
+}
+
+.priority-action-card.recommended {
+  border-color: var(--tw-info-300);
+  box-shadow: inset 3px 0 0 var(--tw-info-500);
+}
+
+.priority-action-card > header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.priority-action-card > header strong {
+  color: var(--tw-neutral-900);
+  flex: 1 1 auto;
+  font-size: 13px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.priority-badge {
+  align-items: center;
+  background: var(--tw-info-500);
+  border-radius: 6px;
+  color: #fff;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 800;
+  height: 22px;
+  justify-content: center;
+  width: 28px;
+}
+
+.priority-action-card:not(.recommended) .priority-badge {
+  background: var(--tw-neutral-100);
+  color: var(--tw-neutral-700);
+}
+
+.priority-tag {
+  background: var(--tw-info-100);
+  border-radius: 4px;
+  color: var(--tw-info-700);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+}
+
+.priority-row-more {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--tw-neutral-500);
+  cursor: pointer;
+  display: inline-flex;
+  height: 22px;
+  justify-content: center;
+  padding: 0;
+  width: 22px;
+}
+
+.priority-row-more:hover {
+  background: var(--tw-neutral-100);
+  color: var(--tw-neutral-700);
+}
+
+.priority-action-card p {
+  color: var(--tw-neutral-500);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.priority-action-meta {
+  display: grid;
+  gap: 4px 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+
+.priority-action-meta > div {
+  align-items: baseline;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.priority-action-meta dt {
+  color: var(--tw-neutral-500);
+  font-size: 11px;
+  margin: 0;
+}
+
+.priority-action-meta dd {
+  color: var(--tw-neutral-900);
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.priority-action-meta > div.tone-warning dd { color: var(--tw-warn-700); }
+.priority-action-meta > div.tone-danger dd { color: var(--tw-danger-700); }
+.priority-action-meta > div.tone-success dd { color: var(--tw-success-700); }
+
+.priority-action-button {
+  align-items: center;
+  background: var(--tw-info-500);
+  border: 1px solid var(--tw-info-500);
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 5px;
+  justify-content: center;
+  margin-top: 2px;
+  min-height: 32px;
+  padding: 0 12px;
+  width: 100%;
+}
+
+.priority-action-button:hover {
+  background: var(--tw-info-700);
+  border-color: var(--tw-info-700);
+}
+
+.priority-action-button.secondary {
+  background: #fff;
+  border-color: var(--tw-info-300);
+  color: var(--tw-info-700);
+}
+
+.priority-action-button.secondary:hover {
+  background: var(--tw-info-50);
+}

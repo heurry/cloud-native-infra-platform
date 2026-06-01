@@ -1,0 +1,75 @@
+instances:
+  - name: auto-router
+    kind: auto_router
+    base_url: http://127.0.0.1:8088/api/proxy/auto-router/v1
+    model_id: qwen3-4b-customer
+    gpu_id: auto
+    routing_role: auto_router
+    api_key: EMPTY
+    status: unknown
+    metadata:
+      candidate_endpoints:
+        - aibrix-gateway
+        - direct-round-robin
+      routing_strategies:
+        - least-request
+        - prefix-cache
+        - least-kv-cache
+        - least-latency
+        - throughput
+      high_retrieval_score: 0.35
+      long_prompt_tokens: 160
+      long_generation_tokens: 256
+      high_latency_ms: 3000
+      high_error_rate: 0.02
+
+  - name: vllm-replica-0
+    kind: vllm
+    base_url: http://127.0.0.1:8000/v1
+    model_id: qwen3-4b-customer
+    gpu_id: "0"
+    routing_role: replica
+    api_key: EMPTY
+    status: unknown
+    metadata:
+      launch_config: configs/serve/qwen3_4b_vllm_replica0.yaml
+
+  - name: vllm-replica-1
+    kind: vllm
+    base_url: http://127.0.0.1:8001/v1
+    model_id: qwen3-4b-customer
+    gpu_id: "1"
+    routing_role: replica
+    api_key: EMPTY
+    status: unknown
+    metadata:
+      launch_config: configs/serve/qwen3_4b_vllm_replica1.yaml
+
+  - name: aibrix-gateway
+    kind: aibrix
+    base_url: http://127.0.0.1:8010/v1
+    model_id: qwen3-4b-customer
+    gpu_id: gateway
+    routing_role: gateway
+    api_key: EMPTY
+    status: unknown
+    metadata:
+      routing_strategies:
+        - least-request
+        - prefix-cache
+        - least-kv-cache
+        - least-latency
+        - throughput
+
+  - name: direct-round-robin
+    kind: client_round_robin
+    base_url: http://127.0.0.1:8000/v1
+    model_id: qwen3-4b-customer
+    gpu_id: dual
+    routing_role: client_round_robin
+    api_key: EMPTY
+    status: unknown
+    metadata:
+      target_instances:
+        - vllm-replica-0
+        - vllm-replica-1

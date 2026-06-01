@@ -1,0 +1,94 @@
+# CloudNative Infra Platform — Helm values（5B.5）。
+# 镜像默认引用本地构建产物（无 registry 环境）：先 build 并 `minikube image load`，
+# pullPolicy=IfNotPresent 即可命中本地镜像。有 registry 时改 repository/tag。
+
+nameOverride: ""
+fullnameOverride: ""
+
+imagePullPolicy: IfNotPresent
+
+# go 控制面（单一入口，无状态 → 可多副本）。
+goServer:
+  replicas: 2
+  image:
+    repository: cloudnative-infra-platform/go-server
+    tag: latest
+  service:
+    port: 8081
+  # 无状态：状态在 PostgreSQL，可水平扩展。
+  # 注意：服务注册表 reaper 在每副本各跑一份（SweepStale 幂等，安全但冗余；
+  # 生产可加 leader election 仅主副本跑）。
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: "1", memory: 512Mi }
+  env:
+    AI_REQUEST_TIMEOUT_SECONDS: "90"
+    REGISTRY_TTL_SECONDS: "30"
+    REGISTRY_SWEEP_SECONDS: "15"
+    CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173"
+
+aiService:
+  replicas: 1
+  image:
+    repository: cloudnative-infra-platform/python-ai-service
+    tag: latest
+  service:
+    port: 8200
+  env:
+    AI_STUB_MODE: "auto"
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: "1", memory: 512Mi }
+
+legacyPython:
+  enabled: true
+  replicas: 1
+  image:
+    repository: cloudnative-infra-platform/legacy-python
+    tag: latest
+  service:
+    port: 8088
+  resources:
+    requests: { cpu: 50m, memory: 96Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+
+# 节点采集 Agent（host/gpu）。以 DaemonSet 每节点一份；默认关闭（需 host 权限/GPU）。
+agent:
+  enabled: false
+  image:
+    repository: cloudnative-infra-platform/go-agent
+    tag: latest
+  service:
+    port: 8090
+  hostNetwork: false
+
+# 自带 PostgreSQL（演示）。生产建议用托管库：enabled=false 并设 external.url。
+postgres:
+  enabled: true
+  image:
+    repository: postgres
+    tag: 16-alpine
+  service:
+    port: 5432
+  auth:
+    user: infra
+    password: infra
+    database: infra_platform
+  persistence:
+    enabled: true
+    size: 1Gi
+  external:
+    url: ""  # postgres://user:pass@host:5432/db?sslmode=disable（postgres.enabled=false 时使用）
+
+# go-server 经 client-go in-cluster 读集群（pods/deployments/events/nodes/hpa）所需 RBAC。
+rbac:
+  create: true
+
+# go-server 健康探针（命中 /api/health）。
+probes:
+  readiness:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  liveness:
+    initialDelaySeconds: 15
+    periodSeconds: 20

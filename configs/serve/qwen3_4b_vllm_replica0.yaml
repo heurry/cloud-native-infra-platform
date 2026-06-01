@@ -1,0 +1,13 @@
+model: model/Qwen3.5-4B
+served_model_name: qwen3-4b-customer
+tensor_parallel_size: 1
+dtype: float16
+max_model_len: 4096
+gpu_memory_utilization: 0.90
+max_num_seqs: 64
+max_num_batched_tokens: 8192
+enable_prefix_caching: true
+trust_remote_code: false
+host: 0.0.0.0
+port: 8000
+api_key: EMPTY

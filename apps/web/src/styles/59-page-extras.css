@@ -1,0 +1,209 @@
+/* ===== 补漏：知识库检索区 + 通用按钮 + 设置状态分节（13-前端复刻改造计划 P4） ===== */
+
+/* 知识库检索测试 */
+.knowledge-search-form {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0;
+}
+.knowledge-search-form input {
+  background: #ffffff;
+  border: 1px solid #d8e0eb;
+  border-radius: 6px;
+  flex: 1;
+  font-size: 13px;
+  height: 34px;
+  min-width: 0;
+  padding: 0 12px;
+}
+.knowledge-search-form button {
+  background: #2563eb;
+  border: 1px solid #2563eb;
+  border-radius: 6px;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  height: 34px;
+  padding: 0 16px;
+}
+.knowledge-search-form button:disabled { cursor: not-allowed; opacity: 0.6; }
+.knowledge-results { display: grid; gap: 6px; padding-top: 4px; }
+.knowledge-result-row {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 8px 12px;
+}
+.knowledge-result-row strong { font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.knowledge-result-row span { color: #2563eb; flex: 0 0 auto; font-size: 12px; font-weight: 700; }
+.knowledge-empty { color: #94a3b8; font-size: 12px; padding: 12px 2px; text-align: center; }
+
+/* 通用主操作按钮（与已存在的 .ghost-button 配套） */
+.primary-button {
+  background: #2563eb;
+  border: 1px solid #2563eb;
+  border-radius: 6px;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 16px;
+}
+.primary-button:disabled { cursor: not-allowed; opacity: 0.6; }
+
+/* 设置状态栏分节容器 */
+.settings-status-section { display: grid; gap: 2px; }
+
+.settings-save-state {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dfe6f1;
+  border-radius: 8px;
+  color: #64748b;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 8px;
+  padding: 9px 12px;
+}
+
+.settings-save-state span {
+  background: #f8fafc;
+  border-radius: 999px;
+  padding: 4px 9px;
+}
+
+.settings-edit-card input {
+  background: #ffffff;
+  border: 1px solid #d8e0eb;
+  border-radius: 6px;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
+  height: 32px;
+  min-width: 0;
+  outline: 0;
+  padding: 0 8px;
+  width: 100%;
+}
+
+.settings-edit-card input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+/* 知识库：分类标签 + 横向分布栅格 */
+.kn-cat-tag {
+  background: #eef2ff;
+  border-radius: 999px;
+  color: #4338ca;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.kn-category-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 6px 0;
+}
+@media (max-width: 1024px) {
+  .kn-category-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* 行操作按钮：复刻图里是清晰的描边图标，避免页面级表格样式把 Lucide 图标压得过淡。 */
+.config-row-actions button,
+.pipeline-row-actions button,
+.benchmark-row-actions button,
+.models-row-actions button,
+.aiops-row-actions button,
+.service-actions-cell button,
+.dashboard-service-actions button,
+.dashboard-deploy-row button,
+.obs-service-row button,
+.k8s-workload-row button {
+  color: #2563eb !important;
+}
+
+.config-row-actions button svg,
+.pipeline-row-actions button svg,
+.benchmark-row-actions button svg,
+.models-row-actions button svg,
+.aiops-row-actions button svg,
+.service-actions-cell button svg,
+.dashboard-service-actions button svg,
+.dashboard-deploy-row button svg,
+.obs-service-row button svg,
+.k8s-workload-row button svg {
+  color: #2563eb;
+  display: block;
+  flex: 0 0 auto;
+  height: 16px;
+  opacity: 1;
+  stroke: #2563eb !important;
+  stroke-width: 2.4;
+  width: 16px;
+}
+
+.config-row-actions button svg *,
+.pipeline-row-actions button svg *,
+.benchmark-row-actions button svg *,
+.models-row-actions button svg *,
+.aiops-row-actions button svg *,
+.service-actions-cell button svg *,
+.dashboard-service-actions button svg *,
+.dashboard-deploy-row button svg *,
+.obs-service-row button svg *,
+.k8s-workload-row button svg * {
+  stroke: #2563eb !important;
+}
+
+.config-row-actions button:hover svg,
+.pipeline-row-actions button:hover svg,
+.benchmark-row-actions button:hover svg,
+.models-row-actions button:hover svg,
+.aiops-row-actions button:hover svg,
+.service-actions-cell button:hover svg,
+.dashboard-service-actions button:hover svg,
+.dashboard-deploy-row button:hover svg,
+.obs-service-row button:hover svg,
+.k8s-workload-row button:hover svg {
+  color: #2563eb;
+  stroke: #2563eb !important;
+}
+
+main.infra-main,
+.infra-copilot {
+  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-width: thin;
+}
+
+main.infra-main::-webkit-scrollbar,
+.infra-copilot::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+main.infra-main::-webkit-scrollbar-thumb,
+.infra-copilot::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+main.infra-main::-webkit-scrollbar-track,
+.infra-copilot::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* AIOps 证据空态提示（弱化文本，非示例数据）。 */
+.aiops-evidence-empty {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--tw-neutral-500);
+}

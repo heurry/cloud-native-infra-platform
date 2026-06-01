@@ -1,0 +1,450 @@
+/* ===== Config Center replica page ===== */
+.config-replica {
+  gap: 10px;
+}
+
+.config-replica .console-page-header {
+  margin-bottom: 2px;
+}
+
+.config-replica .console-refresh.primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.config-process-ribbon {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.config-process-step {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dfe7f2;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  min-height: 48px;
+  padding: 8px 10px;
+  position: relative;
+}
+
+.config-process-step:not(:last-child)::after {
+  color: #bfdbfe;
+  content: "›";
+  font-size: 22px;
+  position: absolute;
+  right: -12px;
+  top: 11px;
+  z-index: 1;
+}
+
+.config-process-step span {
+  align-items: center;
+  background: #f1f5f9;
+  border-radius: 999px;
+  color: #64748b;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.config-process-step strong {
+  color: #0f172a;
+  display: block;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.config-process-step small {
+  color: #64748b;
+  display: block;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.config-process-step.active {
+  background: #eff6ff;
+  border-color: #2563eb;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12);
+}
+
+.config-process-step.active span {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.infra-kpi-grid.config-kpi-strip {
+  gap: 10px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.config-main-panel {
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.config-tabs {
+  align-items: center;
+  border-bottom: 1px solid #edf2f7;
+  display: flex;
+  gap: 24px;
+  height: 48px;
+  padding: 0 18px;
+}
+
+.config-tabs button {
+  background: transparent;
+  border: 0;
+  color: #475569;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  height: 48px;
+  padding: 0;
+  position: relative;
+}
+
+.config-tabs button.active {
+  color: #2563eb;
+}
+
+.config-tabs button.active::after {
+  background: #2563eb;
+  border-radius: 999px;
+  bottom: 0;
+  content: "";
+  height: 2px;
+  left: 0;
+  position: absolute;
+  right: 0;
+}
+
+.config-toolbar {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 150px 140px 130px minmax(210px, 1fr) 36px 140px;
+  padding: 14px 16px 12px;
+}
+
+.config-toolbar button,
+.config-search,
+.config-pagination button,
+.config-pagination strong {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #d8e0eb;
+  border-radius: 6px;
+  color: #334155;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  height: 34px;
+  padding: 0 12px;
+}
+
+.config-toolbar button {
+  cursor: pointer;
+  justify-content: space-between;
+}
+
+.config-toolbar button:not(.icon-button):not(.config-create-button)::after {
+  color: #64748b;
+  content: "⌄";
+  font-size: 13px;
+  margin-left: auto;
+}
+
+.config-search {
+  color: #94a3b8;
+  font-weight: 500;
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+.config-search input {
+  background: transparent;
+  border: 0;
+  color: #334155;
+  font: inherit;
+  min-width: 0;
+  outline: none;
+  width: 100%;
+}
+
+.config-search input::placeholder {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.config-toolbar .icon-button {
+  justify-content: center;
+  padding: 0;
+}
+
+.config-toolbar .config-create-button {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+  gap: 6px;
+  justify-content: center;
+}
+
+.config-table {
+  border-top: 1px solid #edf2f7;
+}
+
+.config-table-row {
+  align-items: center;
+  border-top: 1px solid #edf2f7;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(132px, 1.25fr) minmax(82px, 0.78fr) 68px 82px 78px minmax(112px, 0.9fr) 60px 108px;
+  min-height: 51px;
+  padding: 7px 16px;
+}
+
+.config-table-row:first-child {
+  border-top: 0;
+}
+
+.config-table-row.header {
+  background: #ffffff;
+  border-top: 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 38px;
+}
+
+.config-table-row span {
+  min-width: 0;
+}
+
+.config-table-row strong,
+.config-table-row small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-table-row strong {
+  color: #0f172a;
+  font-size: 12px;
+}
+
+.config-name-cell strong {
+  color: #2563eb;
+}
+
+.config-table-row small {
+  color: #64748b;
+  font-size: 11px;
+  margin-top: 3px;
+}
+
+.config-version-cell small {
+  color: #16a34a;
+  font-weight: 700;
+}
+
+.config-env-pill,
+.config-state-pill {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1;
+  padding: 6px 9px;
+}
+
+.config-env-pill.prod {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.config-env-pill.staging {
+  background: #ffedd5;
+  color: #ea580c;
+}
+
+.config-env-pill.dev {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.config-state-pill {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.config-row-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.config-row-actions button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #d8e0eb;
+  border-radius: 6px;
+  color: #334155;
+  cursor: pointer;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.config-row-actions button:hover {
+  border-color: #bfdbfe;
+  color: #2563eb;
+}
+
+.config-row-actions button svg,
+.pipeline-row-actions button svg {
+  color: #2563eb;
+  height: 13px;
+  stroke: #2563eb !important;
+  stroke-width: 2.2;
+  width: 13px;
+}
+
+.config-pagination {
+  align-items: center;
+  border-top: 1px solid #edf2f7;
+  color: #64748b;
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  min-height: 48px;
+  padding: 8px 16px;
+}
+
+.config-pagination button,
+.config-pagination strong {
+  cursor: pointer;
+  height: 28px;
+  justify-content: center;
+  min-width: 28px;
+  padding: 0 9px;
+}
+
+.config-pagination button.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+
+.config-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.config-pagination .jump {
+  margin-left: auto;
+}
+
+.config-pagination strong {
+  color: #0f172a;
+  display: inline-flex;
+  margin: 0 4px;
+}
+
+.config-bottom-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 0.7fr);
+}
+
+.config-change-list,
+.config-policy-list {
+  display: grid;
+  gap: 8px;
+}
+
+.config-change-row,
+.config-policy-row {
+  align-items: center;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  min-height: 44px;
+  padding: 8px 10px;
+}
+
+.config-change-row > svg,
+.config-policy-row > svg {
+  background: #eff6ff;
+  border-radius: 7px;
+  color: #2563eb;
+  height: 28px;
+  padding: 6px;
+  width: 28px;
+}
+
+.config-change-row strong,
+.config-policy-row strong {
+  color: #0f172a;
+  display: block;
+  font-size: 12px;
+}
+
+.config-change-row span,
+.config-policy-row span {
+  color: #64748b;
+  display: block;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.config-change-row small {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.config-policy-row em {
+  background: #dcfce7;
+  border-radius: 999px;
+  color: #16a34a;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  padding: 5px 8px;
+}
+
+@media (max-width: 1500px) {
+  .config-process-ribbon {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .infra-kpi-grid.config-kpi-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .config-table {
+    overflow-x: auto;
+  }
+
+  .config-table-row {
+    min-width: 960px;
+  }
+
+  .config-bottom-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

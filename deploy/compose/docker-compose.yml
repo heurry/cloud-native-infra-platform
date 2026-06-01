@@ -1,0 +1,142 @@
+# 云原生 AI 设施平台 — 本地一键编排（Go-primary，Phase 4）
+#
+# 拓扑：前端 → go-server(:8081 单一入口) ──┬─ 原生 ops（PostgreSQL）
+#                                          ├─ /api/ai/* → python-ai-service(:8200)
+#                                          ├─ legacy（models/benchmarks/evals/proxy…）→ legacy-python(:8088)
+#                                          ├─ k8s（pods/deployments/events/nodes）→ client-go 直读集群（5B.1）
+#                                          └─ host/gpu 节点采集 → go-agent(:8090, host 网络)
+#
+# 用法（在仓库根目录）：
+#   docker compose -f deploy/compose/docker-compose.yml up -d --build
+#   docker compose -f deploy/compose/docker-compose.yml logs -f go-server
+#   docker compose -f deploy/compose/docker-compose.yml down
+#
+# Java backend 已退役（Phase 4）。legacy Python 单体（src/api，:8088）自 5A.4 起容器化纳入本编排
+# （legacy-python 服务），go-server 在 compose 网络内反代其 models/benchmarks/evals/proxy 端点。
+
+name: cloudnative-infra-platform
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: infra_platform
+      POSTGRES_USER: infra
+      POSTGRES_PASSWORD: infra
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U infra -d infra_platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  go-server:
+    build:
+      context: ../../server
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://infra:infra@postgres:5432/infra_platform?sslmode=disable
+      SERVER_ADDR: ":8081"
+      CORS_ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      # go-agent 用 host 网络（需连 minikube IP），故经宿主回环访问。
+      AGENT_BASE_URL: http://host.docker.internal:8090
+      # 5B.1：控制面 client-go 直读集群（kubeconfig 内嵌证书；server 指向 minikube API）。
+      KUBECONFIG: /etc/kubeconfig
+      # 新 AI 服务（结构化诊断 / chat:stream）在同一 compose 网络内。
+      AI_SERVICE_BASE_URL: http://python-ai-service:8200
+      # legacy Python 单体（models/benchmarks/evals/proxy…）在 compose 网络内。
+      LEGACY_PYTHON_BASE_URL: http://legacy-python:8088
+      # cAdvisor 由 scripts/start_cadvisor_observability.sh 在宿主 18080 做 port-forward。
+      CADVISOR_URL: http://host.docker.internal:18080/metrics
+    ports:
+      - "8081:8081"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # 内嵌证书的 kubeconfig（server: https://192.168.49.2:8443）；供控制面 client-go 直读。
+      - ./.secrets/kubeconfig:/etc/kubeconfig:ro
+    networks:
+      - default
+      # 接入 minikube 外部网络，使容器可达集群 API（192.168.49.2:8443）。
+      - minikube
+    depends_on:
+      postgres:
+        condition: service_healthy
+      legacy-python:
+        condition: service_healthy
+    # 运行期为 distroless/static（无 shell），故不配 wget 健康检查；以 depends_on 控制顺序。
+
+  python-ai-service:
+    build:
+      context: ../../apps/ai-service
+      dockerfile: Dockerfile
+    environment:
+      # 默认 auto：试 live，失败回退 stub。无 GPU 环境可设 AI_STUB_MODE=on 强制确定性 stub。
+      AI_STUB_MODE: auto
+      AI_LLM_BASE_URL: http://host.docker.internal:8010/v1
+      AI_LLM_MODEL: qwen3-4b-customer
+    ports:
+      - "8200:8200"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8200/internal/health').status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  # 迁移期 legacy Python 单体（src/api，:8088）：models/benchmarks/evals/proxy 等端点。
+  # 复用缓存的 twf-ai-service:dev 基础镜像（受限网络下不拉基础镜像/不装包）。
+  legacy-python:
+    build:
+      context: ../../
+      dockerfile: deploy/compose/legacy-python.Dockerfile
+    environment:
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      # 复用宿主既有 SQLite 库并持久化（benchmark_runs / conversations 等）。
+      - ../../runs/app:/app/runs/app
+    ports:
+      - "8088:8088"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8088/api/health').status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  go-agent:
+    build:
+      context: ../../agent
+      dockerfile: Dockerfile
+    # host 网络：直连 minikube API server（192.168.49.2:8443）。
+    network_mode: host
+    # GPU 透传：宿主已装 nvidia-container-toolkit（runtime=nvidia）。
+    # 无 GPU 环境时可删除此段，gpu.go 会优雅降级（available=false）。
+    runtime: nvidia
+    environment:
+      AGENT_PORT: "8090"
+      # 5B.1：集群级 k8s 直读已上提到控制面；Agent 退成纯节点采集（host/gpu），关闭 k8s。
+      AGENT_K8S_ENABLED: "false"
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: utility
+      LD_LIBRARY_PATH: /nvidia/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64
+    volumes:
+      # Docker GPU runtime 异常时的本地兜底：让 Agent 可直接调用宿主 nvidia-smi/NVML。
+      - /usr/bin/nvidia-smi:/host/usr/bin/nvidia-smi:ro
+      - /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:/nvidia/lib/libnvidia-ml.so.1:ro
+    privileged: true
+
+networks:
+  default:
+  # minikube 创建的外部网络；go-server 接入它以直达集群 API。
+  # 若用其它集群（kind/k3s/云），改为对应网络或删除此段并让 KUBECONFIG 指向可达地址。
+  minikube:
+    external: true
+
+volumes:
+  pgdata:

@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cip.fullname" . }}-go-server
+  labels:
+    {{- include "cip.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.goServer.service.port }}
+      targetPort: 8081
+      name: http
+  selector:
+    {{- include "cip.selectorLabels" (dict "root" . "component" "go-server") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cip.fullname" . }}-go-server
+  labels:
+    {{- include "cip.labels" . | nindent 4 }}
+spec:
+  # 无状态：状态在 PostgreSQL，可水平扩展（5B.5 多副本）。
+  replicas: {{ .Values.goServer.replicas }}
+  selector:
+    matchLabels:
+      {{- include "cip.selectorLabels" (dict "root" . "component" "go-server") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cip.selectorLabels" (dict "root" . "component" "go-server") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "cip.serviceAccountName" . }}
+      containers:
+        - name: go-server
+          image: "{{ .Values.goServer.image.repository }}:{{ .Values.goServer.image.tag }}"
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - containerPort: 8081
+              name: http
+          env:
+            - name: SERVER_ADDR
+              value: ":8081"
+            - name: DATABASE_URL
+              value: {{ include "cip.databaseURL" . | quote }}
+            - name: AI_SERVICE_BASE_URL
+              value: "http://{{ include "cip.fullname" . }}-ai-service:{{ .Values.aiService.service.port }}"
+            {{- if .Values.legacyPython.enabled }}
+            - name: LEGACY_PYTHON_BASE_URL
+              value: "http://{{ include "cip.fullname" . }}-legacy-python:{{ .Values.legacyPython.service.port }}"
+            {{- end }}
+            {{- if .Values.agent.enabled }}
+            - name: AGENT_BASE_URL
+              value: "http://{{ include "cip.fullname" . }}-agent:{{ .Values.agent.service.port }}"
+            {{- end }}
+            {{- range $k, $v := .Values.goServer.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8081
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8081
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+          resources:
+            {{- toYaml .Values.goServer.resources | nindent 12 }}

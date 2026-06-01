@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qwen3-4b-customer
+  labels:
+    app: qwen3-4b-customer
+    model.aibrix.ai/name: qwen3-4b-customer
+    model.aibrix.ai/port: "8000"
+    model.aibrix.ai/runtime: vllm
+spec:
+  strategy:
+    type: Recreate
+  replicas: 2
+  selector:
+    matchLabels:
+      app: qwen3-4b-customer
+      model.aibrix.ai/name: qwen3-4b-customer
+      model.aibrix.ai/port: "8000"
+  template:
+    metadata:
+      labels:
+        app: qwen3-4b-customer
+        model.aibrix.ai/name: qwen3-4b-customer
+        model.aibrix.ai/port: "8000"
+        model.aibrix.ai/runtime: vllm
+    spec:
+      containers:
+        - name: vllm
+          image: local/vllm-openai:qwen35-v0.19.1-deepepfix
+          imagePullPolicy: IfNotPresent
+          command:
+            - vllm
+            - serve
+          args:
+            - /models/Qwen3.5-4B
+            - --served-model-name
+            - qwen3-4b-customer
+            - --tensor-parallel-size
+            - "1"
+            - --dtype
+            - float16
+            - --max-model-len
+            - "4096"
+            - --gpu-memory-utilization
+            - "0.90"
+            - --max-num-seqs
+            - "64"
+            - --max-num-batched-tokens
+            - "8192"
+            - --enable-prefix-caching
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8000"
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            requests:
+              nvidia.com/gpu: "1"
+            limits:
+              nvidia.com/gpu: "1"
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            failureThreshold: 90
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          volumeMounts:
+            - name: model-store
+              mountPath: /models/Qwen3.5-4B
+              readOnly: true
+      volumes:
+        - name: model-store
+          persistentVolumeClaim:
+            claimName: qwen35-4b-model-store
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qwen3-4b-customer
+  labels:
+    app: qwen3-4b-customer
+    model.aibrix.ai/name: qwen3-4b-customer
+    model.aibrix.ai/port: "8000"
+spec:
+  selector:
+    app: qwen3-4b-customer
+    model.aibrix.ai/name: qwen3-4b-customer
+    model.aibrix.ai/port: "8000"
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

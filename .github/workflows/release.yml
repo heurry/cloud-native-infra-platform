@@ -1,0 +1,51 @@
+name: Release Images
+
+# Phase 5 / 5B.6（CD）：打 tag（v*）或手动触发时，构建并推送平台镜像到 GHCR。
+# 这就是"部署执行"的真实化——取代此前 deployments 流水线里"人工 finish 模拟"。
+# 注：legacy-python 镜像基于离线缓存基座（迁移期 shim），不进 CI 镜像流水线。
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: go-server
+            context: server
+            dockerfile: server/Dockerfile
+          - name: python-ai-service
+            context: apps/ai-service
+            dockerfile: apps/ai-service/Dockerfile
+          - name: go-agent
+            context: agent
+            dockerfile: agent/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository }}-${{ matrix.name }}
+          tags: |
+            type=ref,event=tag
+            type=sha
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

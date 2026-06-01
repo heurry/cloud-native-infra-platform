@@ -1,0 +1,2 @@
+-- 回滚 000004。
+DROP TABLE IF EXISTS diagnoses CASCADE;

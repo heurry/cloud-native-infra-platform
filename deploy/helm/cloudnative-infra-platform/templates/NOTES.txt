@@ -1,0 +1,25 @@
+CloudNative Infra Platform 已部署到 namespace「{{ .Release.Namespace }}」（release: {{ .Release.Name }}）。
+
+组件：
+  - go-server（控制面，单一入口，{{ .Values.goServer.replicas }} 副本，client-go in-cluster 直读集群）
+  - ai-service（结构化诊断 / chat:stream）
+{{- if .Values.legacyPython.enabled }}
+  - legacy-python（models/benchmarks/evals/proxy）
+{{- end }}
+{{- if .Values.postgres.enabled }}
+  - postgres（演示自带库；生产请用托管库并设 postgres.enabled=false + postgres.external.url）
+{{- end }}
+{{- if .Values.agent.enabled }}
+  - agent（DaemonSet，节点 host/gpu 采集）
+{{- end }}
+
+访问控制面（端口转发）：
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "cip.fullname" . }}-go-server {{ .Values.goServer.service.port }}:{{ .Values.goServer.service.port }}
+  curl localhost:{{ .Values.goServer.service.port }}/api/health
+
+镜像（无 registry 时先构建并加载进 minikube）：
+  minikube image load {{ .Values.goServer.image.repository }}:{{ .Values.goServer.image.tag }}
+  minikube image load {{ .Values.aiService.image.repository }}:{{ .Values.aiService.image.tag }}
+{{- if .Values.legacyPython.enabled }}
+  minikube image load {{ .Values.legacyPython.image.repository }}:{{ .Values.legacyPython.image.tag }}
+{{- end }}

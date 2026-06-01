@@ -1,0 +1,58 @@
+FROM vllm/vllm-openai:v0.11.0
+
+RUN cat > /tmp/qwen35-runtime-requirements.txt <<'EOF'
+aiohttp==3.13.5
+anthropic==0.102.0
+apache-tvm-ffi==0.1.11
+compressed-tensors==0.15.0.1
+cuda-bindings==12.9.4
+cuda-pathfinder==1.5.4
+cuda-python==12.9.4
+depyf==0.20.0
+fastapi==0.136.1
+flashinfer-cubin==0.6.6
+flashinfer-python==0.6.6
+googleapis-common-protos==1.75.0
+grpcio==1.80.0
+huggingface-hub==1.15.0
+importlib-metadata==8.7.1
+llguidance==1.3.0
+mistral-common==1.11.2
+nvidia-nccl-cu12==2.27.5
+opencv-python-headless==4.13.0.92
+opentelemetry-api==1.41.1
+opentelemetry-exporter-otlp==1.41.1
+opentelemetry-exporter-otlp-proto-common==1.41.1
+opentelemetry-exporter-otlp-proto-grpc==1.41.1
+opentelemetry-exporter-otlp-proto-http==1.41.1
+opentelemetry-proto==1.41.1
+opentelemetry-sdk==1.41.1
+opentelemetry-semantic-conventions==0.62b1
+protobuf==6.33.6
+pydantic==2.13.4
+pydantic-core==2.46.4
+pydantic-settings==2.14.1
+regex==2026.5.9
+starlette==0.52.1
+torch==2.10.0
+torchaudio==2.10.0
+torchvision==0.25.0
+transformers==5.6.1
+triton==3.6.0
+typer==0.25.1
+vllm==0.19.1
+xgrammar==0.2.0
+zipp==3.23.1
+EOF
+
+RUN python3 -m pip install --no-cache-dir --upgrade -r /tmp/qwen35-runtime-requirements.txt \
+    && sed -i '/ep_kernels_workspace\/DeepEP/d' /usr/local/lib/python3.12/dist-packages/easy-install.pth \
+    && python3 - <<'PY'
+import importlib.util
+import transformers
+import vllm
+
+print(f"[INFO] vllm={vllm.__version__}")
+print(f"[INFO] transformers={transformers.__version__}")
+print(f"[INFO] deep_ep_available={importlib.util.find_spec('deep_ep') is not None}")
+PY

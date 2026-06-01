@@ -1,0 +1,38 @@
+# sqlc 配置（D1：sqlc / SQL-first）。
+# schema 显式列出全部 DDL up 文件（不含 seed/down，避免 INSERT/DROP 干扰类型推导）。
+# 维护规则：新增建表迁移（CREATE TABLE）必须把对应的 *.up.sql 追加到下面的 schema 列表，
+# 否则 sqlc 校验该表的查询时会报 relation does not exist（Phase 3 踩过此坑）。
+# 覆盖：uuid→string、timestamptz→time.Time（配合 emit_pointers_for_null_types
+# 让可空列成 *string/*time.Time），让生成代码对 JSON 友好、与 handler/DTO 对接顺滑。
+# uuid 参数在 .sql 里用 $N::uuid 显式转换（与 Java ?::uuid 一致），运行期 pgx 以 text 传入。
+version: "2"
+sql:
+  - engine: "postgresql"
+    schema:
+      - "internal/db/migrations/000001_init_core_schema.up.sql"
+      - "internal/db/migrations/000004_diagnoses.up.sql"
+      - "internal/db/migrations/000005_service_registry.up.sql"
+    queries: "internal/db/query"
+    gen:
+      go:
+        package: "sqlcgen"
+        out: "internal/db/sqlcgen"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_pointers_for_null_types: true
+        emit_empty_slices: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "string"
+          - db_type: "uuid"
+            nullable: true
+            go_type:
+              type: "string"
+              pointer: true
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+          - db_type: "timestamptz"
+            nullable: true
+            go_type:
+              type: "time.Time"
+              pointer: true

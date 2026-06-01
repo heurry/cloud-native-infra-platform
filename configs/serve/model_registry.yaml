@@ -1,0 +1,30 @@
+project: cloudnative-infra-platform
+registry_version: 1
+base_models:
+  - name: qwen3.5-4b-base
+    model_path: model/Qwen3.5-4B
+    tokenizer_path: model/Qwen3.5-4B
+    model_family: Qwen3.5
+    parameter_size: 4B
+    default_max_model_len: 4096
+    recommended_vllm_args:
+      tensor_parallel_size: 1
+      dtype: float16
+      gpu_memory_utilization: 0.90
+      max_num_seqs: 64
+      max_num_batched_tokens: 8192
+      enable_prefix_caching: true
+served_models:
+  - served_model_name: qwen3-4b-customer
+    aibrix_service_name: qwen3-4b-customer
+    base_model: qwen3.5-4b-base
+    artifact_type: base_model
+    artifact_path: model/Qwen3.5-4B
+    task_type: customer_support_chat
+    eval_report: runs/app/customer_support.db
+    serving_profile:
+      max_model_len: 4096
+      max_tokens: 256
+      recommended_concurrency_levels: [1, 2, 4, 8, 16]
+      benchmark_report: runs/serve/qwen3_4b_aibrix_gateway_benchmark.md
+adapters: []

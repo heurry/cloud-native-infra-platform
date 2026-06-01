@@ -1,0 +1,96 @@
+name: CI
+
+# Phase 5 / 5B.6：用真实 CI 取代"人工 finish 模拟"——每次 push/PR 自动
+# 构建+检查 Go 控制面 / Agent / 前端 / AI 服务，并校验 sqlc 生成与 Helm chart。
+on:
+  push:
+    branches: [main, "go-migration-*"]
+  pull_request:
+
+jobs:
+  go-server:
+    runs-on: ubuntu-latest
+    env:
+      GOWORK: "off" # 按模块独立构建（与本地 Docker 构建一致）
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: server/go.sum
+      - name: build / vet / test
+        working-directory: server
+        run: |
+          go build ./...
+          go vet ./...
+          go test ./...
+
+  go-agent:
+    runs-on: ubuntu-latest
+    env:
+      GOWORK: "off"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: agent/go.sum
+      - name: build / vet
+        working-directory: agent
+        run: |
+          go build ./...
+          go vet ./...
+
+  sqlc-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: sqlc-dev/setup-sqlc@v4
+        with:
+          sqlc-version: "1.27.0"
+      - name: verify generated code is up to date
+        working-directory: server
+        run: |
+          sqlc generate
+          git diff --exit-code -- internal/db/sqlcgen \
+            || (echo "::error::sqlc 生成代码与 query/schema 不一致，请在 server/ 跑 'sqlc generate' 并提交"; exit 1)
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: install / typecheck / build
+        working-directory: apps/web
+        run: |
+          npm ci
+          npm run build
+
+  ai-service:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: install / test
+        working-directory: apps/ai-service
+        run: |
+          pip install -r requirements.txt pytest
+          pytest -q
+
+  helm-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
+      - name: lint + template
+        run: |
+          helm lint deploy/helm/cloudnative-infra-platform
+          helm template cip deploy/helm/cloudnative-infra-platform > /dev/null
