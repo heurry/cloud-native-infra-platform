@@ -5,6 +5,7 @@ __pycache__/
 .venv/
 node_modules/
 browser_extensions/
+screenshots/
 data/raw/
 data/cleaned/
 data/tokenized/

@@ -13,9 +13,9 @@
 - `src/api/`、`src/customer_support/`、`src/jobs/`、`src/metrics/`、`src/rag/`、`src/serve/`：迁移期 Python facade、知识库、压测、指标和系统快照辅助。
 - `configs/app/`、`configs/serve/`：平台运行和服务配置。
 - `deploy/`：compose、AIBrix、observability 部署模板。
-- `docs/`、`云原生平台/`：当前平台设计、迁移计划和复刻说明。
+- `docs/`：当前平台设计、部署和复刻说明。
+- `docs/images/`：控制台各页面截图。
 - `data/customer_support/`：轻量 demo 知识库和评测样例。
-- `screenshots/`：前端样例、复刻和联调截图。
 
 ## 移除范围
 

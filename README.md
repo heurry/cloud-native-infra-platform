@@ -2,7 +2,7 @@
 
 面向云原生微服务场景的分布式基础设施管理平台，统一提供配置中心、服务治理、元数据管理、可观测监控、CI/CD 自动化、弹性扩缩容、分层存储与 AI 运维分析能力。
 
-![平台总览界面](screenshots/after/dashboard.png)
+![平台总览界面](docs/images/dashboard.png)
 
 当前项目采用 **Go-primary** 架构：React 控制台只对接 Go 控制面 API；Go 负责平台治理、PostgreSQL 数据、Kubernetes/Agent 访问、审计和可观测聚合；Python AI Service 提供结构化诊断与 Copilot 推理；legacy Python API 仅保留知识库、压测和演示工作负载的迁移期能力。
 
@@ -31,6 +31,18 @@ AIBrix / vLLM provide OpenAI-compatible model serving for AIOps and benchmark fl
 - AI Ops：Go 聚合证据，Python AI Service 生成根因、影响面、证据和建议动作。
 - 设置页：API、Agent、AI Service、Legacy Proxy 健康探测和本地配置编辑。
 
+## 界面预览
+
+| 服务治理 | 集群快照 |
+| --- | --- |
+| ![服务治理](docs/images/services.png) | ![集群快照](docs/images/kubernetes.png) |
+| **可观测监控** | **AI Ops** |
+| ![可观测监控](docs/images/observability.png) | ![AI Ops](docs/images/ai-ops.png) |
+| **发布流水线** | **压测门禁** |
+| ![发布流水线](docs/images/pipelines.png) | ![压测门禁](docs/images/benchmarks.png) |
+
+> 更多页面截图见 [`docs/images/`](docs/images/)（知识库 / 模型注册 / 配置中心 / 演示应用 / 设置）。
+
 ## 仓库结构
 
 ```text
@@ -48,7 +60,7 @@ configs/app/       应用运行配置
 configs/serve/     vLLM / AIBrix / 模型服务配置
 deploy/            compose、AIBrix、observability 部署文件
 docs/              当前平台设计、部署和归位说明
-screenshots/       前端样例、复刻和后端联调截图
+docs/images/       控制台各页面截图
 ```
 
 ## 快速开始

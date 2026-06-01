@@ -5,6 +5,7 @@ node_modules/
 apps/web/node_modules/
 apps/web/dist/
 .git/
+docs/images/
 screenshots/
 **/__pycache__/
 **/*.pyc
