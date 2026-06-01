@@ -1,0 +1,41 @@
+name: Feature request
+description: Suggest an idea or enhancement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What problem are you trying to solve? Why is it valuable?
+      placeholder: I'm always frustrated when ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior or capability you'd like.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you've thought about, if any.
+    validations:
+      required: false
+  - type: dropdown
+    id: component
+    attributes:
+      label: Target component
+      options:
+        - server (Go control plane)
+        - agent (Go collector)
+        - apps/web (frontend)
+        - apps/ai-service (Python AI service)
+        - deploy / infra
+        - docs
+        - cross-cutting / not sure
+    validations:
+      required: true

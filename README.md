@@ -1,6 +1,14 @@
 # CloudNative Infra Platform
 
+[![CI](https://github.com/heurry/cloud-native-infra-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/heurry/cloud-native-infra-platform/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+![Go](https://img.shields.io/badge/Go-1.22-00ADD8?logo=go&logoColor=white)
+![Node](https://img.shields.io/badge/Node-20-339933?logo=node.js&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+
 面向云原生微服务场景的分布式基础设施管理平台，统一提供配置中心、服务治理、元数据管理、可观测监控、CI/CD 自动化、弹性扩缩容、分层存储与 AI 运维分析能力。
+
+> **项目状态**：本仓库为演示 / 作品集级别的平台实现，端到端可运行；部分链路（AIBrix/vLLM、GPU、minikube 集群）依赖本地环境，在普通机器上可按需跳过。
 
 ![平台总览界面](docs/images/dashboard.png)
 
@@ -145,3 +153,16 @@ cd apps/ai-service
 pip install -r requirements.txt
 pytest tests/ -q
 ```
+
+## 贡献与社区
+
+- 贡献指南：[CONTRIBUTING.md](CONTRIBUTING.md)
+- 行为准则：[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- 安全漏洞报告：[SECURITY.md](SECURITY.md)（请勿提交公开 issue）
+- 变更记录：[CHANGELOG.md](CHANGELOG.md)
+
+欢迎通过 Issue / Pull Request 参与。提交前请阅读贡献指南并确保相关构建与测试通过。
+
+## 许可证
+
+本项目基于 [Apache License 2.0](LICENSE) 开源。

@@ -1,0 +1,48 @@
+version: 2
+updates:
+  # Go control plane
+  - package-ecosystem: gomod
+    directory: /server
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "go"]
+
+  # Go agent
+  - package-ecosystem: gomod
+    directory: /agent
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "go"]
+
+  # Frontend
+  - package-ecosystem: npm
+    directory: /apps/web
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "frontend"]
+
+  # Python AI service
+  - package-ecosystem: pip
+    directory: /apps/ai-service
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "python"]
+
+  # Legacy Python (root requirements.txt)
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "python"]
+
+  # GitHub Actions workflows
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels: ["dependencies", "ci"]
