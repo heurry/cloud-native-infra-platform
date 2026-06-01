@@ -50,8 +50,6 @@ docs/              当前平台设计、部署和归位说明
 screenshots/       前端样例、复刻和后端联调截图
 ```
 
-不属于当前云原生平台主线的训练产物、历史 LLM 训练代码、浏览器扩展、招聘采集工具和本地运行日志不进入 GitHub 仓库。
-
 ## Quick Start
 
 ### 1. Start Go-primary Backend
@@ -134,21 +132,3 @@ cd apps/ai-service
 pip install -r requirements.txt
 pytest tests/ -q
 ```
-
-## Runtime Data
-
-以下内容属于本地运行产物，不提交到 GitHub：
-
-- `runs/`
-- `model/`
-- `logs/`
-- `node_modules/`
-- `apps/web/dist/`
-- `deploy/compose/.secrets/`
-
-当前仓库只保留源码、配置、部署模板、文档、轻量 demo 数据和截图材料。
-
-## Contributors
-
-- heurry
-- Codex
