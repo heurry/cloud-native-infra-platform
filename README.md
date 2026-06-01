@@ -47,7 +47,6 @@ configs/app/       应用运行配置
 configs/serve/     vLLM / AIBrix / 模型服务配置
 deploy/            compose、AIBrix、observability 部署文件
 docs/              当前平台设计、部署和归位说明
-云原生平台/         云原生平台设计和迁移记录
 screenshots/       前端样例、复刻和后端联调截图
 ```
 

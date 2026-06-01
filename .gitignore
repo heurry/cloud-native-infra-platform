@@ -35,3 +35,4 @@ deploy/compose/.secrets/
 /configs/train/
 /configs/data/
 /configs/model/
+云原生平台/
