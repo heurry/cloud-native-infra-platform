@@ -80,6 +80,18 @@ postgres:
   external:
     url: ""  # postgres://user:pass@host:5432/db?sslmode=disable（postgres.enabled=false 时使用）
 
+# 5B.4a：Redis 横切（缓存 / 限流 / 幂等）。缓存型，无持久化；关闭时 go-server 全降级。
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: 7-alpine
+  service:
+    port: 6379
+  resources:
+    requests: { cpu: 25m, memory: 32Mi }
+    limits: { cpu: 250m, memory: 128Mi }
+
 # go-server 经 client-go in-cluster 读集群（pods/deployments/events/nodes/hpa）所需 RBAC。
 rbac:
   create: true

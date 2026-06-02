@@ -3,6 +3,7 @@ package httpx
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
@@ -36,11 +37,17 @@ func NewRouter(a *API) *chi.Mux {
 	}))
 
 	r.Route("/api", func(r chi.Router) {
+		// 5B.4a：Redis 横切中间件（各自在 Redis 降级时透明直通）。
+		// 限流按 IP 令牌桶；幂等仅对带 Idempotency-Key 的 POST 生效。
+		r.Use(a.RateLimit())
+		r.Use(a.Idempotency())
+
 		r.Get("/health", Health)
 
 		// Phase 1：只读 + 可观测（接口/外形复刻现有 Java 控制面）
 		r.Get("/service-instances", a.serviceInstances)
-		r.Get("/platform/overview", a.overview)
+		// 5B.4a：overview 走 cache-aside（短 TTL；服务实例写操作显式失效）。
+		r.Get("/platform/overview", a.cached(cacheKeyOverview, a.CacheTTL, a.overview))
 
 		// 5B.1：控制面 client-go 直读集群级 k8s（取代经 Agent 透传）；新增 events/nodes。
 		r.Route("/kubernetes", func(r chi.Router) {
@@ -49,7 +56,8 @@ func NewRouter(a *API) *chi.Mux {
 			r.Get("/events", a.k8sNative(false, false, true, false, false))
 			r.Get("/nodes", a.k8sNative(false, false, false, true, false))
 			r.Get("/hpa", a.k8sNative(false, false, false, false, true)) // 5B.3
-			r.Get("/snapshot", a.k8sNative(true, true, true, true, true))
+			// 5B.4a：整集群快照走 cache-aside（命中真实 minikube，开销大；10s TTL）。
+			r.Get("/snapshot", a.cached(cacheKeyK8sSnapshot, 10*time.Second, a.k8sNative(true, true, true, true, true)))
 		})
 
 		r.Route("/metrics", func(r chi.Router) {
