@@ -49,6 +49,7 @@ func (a *API) registerServiceInstance(w http.ResponseWriter, r *http.Request) {
 	}
 	a.Store.Audit(r.Context(), operatorOr(req.Operator), "operator", "service.register", "service_instance", name,
 		map[string]any{"base_url": req.BaseURL, "kind": req.Kind})
+	a.invalidateOverview(r) // 服务数 / 健康数变化 → 失效 overview 缓存（5B.4a）
 	WriteJSON(w, http.StatusOK, map[string]any{"name": name, "status": status})
 }
 
@@ -64,6 +65,7 @@ func (a *API) heartbeatServiceInstance(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, http.StatusNotFound, "not_found", "service instance not found")
 		return
 	}
+	a.invalidateOverview(r) // 心跳可能让 unreachable→healthy → 失效 overview 缓存（5B.4a）
 	WriteJSON(w, http.StatusOK, map[string]any{"name": name, "status": "healthy"})
 }
 
@@ -80,6 +82,7 @@ func (a *API) deregisterServiceInstance(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	a.Store.Audit(r.Context(), "system", "operator", "service.deregister", "service_instance", name, map[string]any{})
+	a.invalidateOverview(r) // 服务数变化 → 失效 overview 缓存（5B.4a）
 	WriteJSON(w, http.StatusOK, map[string]any{"name": name, "deregistered": true})
 }
 

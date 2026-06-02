@@ -53,6 +53,10 @@ spec:
             - name: AGENT_BASE_URL
               value: "http://{{ include "cip.fullname" . }}-agent:{{ .Values.agent.service.port }}"
             {{- end }}
+            {{- if .Values.redis.enabled }}
+            - name: REDIS_URL
+              value: "redis://{{ include "cip.fullname" . }}-redis:{{ .Values.redis.service.port }}"
+            {{- end }}
             {{- range $k, $v := .Values.goServer.env }}
             - name: {{ $k }}
               value: {{ $v | quote }}

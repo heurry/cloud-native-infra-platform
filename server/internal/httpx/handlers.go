@@ -13,6 +13,7 @@ import (
 
 	"github.com/heurry/cloudnative-infra-platform/server/internal/agentcli"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/aiclient"
+	"github.com/heurry/cloudnative-infra-platform/server/internal/cache"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/k8s"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/metrics"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/serving"
@@ -36,6 +37,12 @@ type API struct {
 	Serving     *serving.Scraper // Phase 5 / Option A：vLLM Prometheus 指标抓取器（nil=未启用）
 	Cadvisor    *metrics.CadvisorCollector
 	CORSOrigins []string
+	// 5B.4a：Redis 横切（缓存 / 限流 / 幂等）。Cache 为 nil 或禁用时全降级。
+	Cache          *cache.Client
+	CacheTTL       time.Duration
+	IdempotencyTTL time.Duration
+	RateLimitRPS   float64
+	RateLimitBurst int
 }
 
 // ---- GET /api/service-instances（复刻 ServiceInstanceController.listServiceInstances） ----

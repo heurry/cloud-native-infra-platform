@@ -15,6 +15,7 @@ import (
 
 	"github.com/heurry/cloudnative-infra-platform/server/internal/agentcli"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/aiclient"
+	"github.com/heurry/cloudnative-infra-platform/server/internal/cache"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/config"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/db"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/httpx"
@@ -74,22 +75,31 @@ func main() {
 		servingScraper = serving.New(k8sCollector, cfg.VLLMMetricsPort)
 	}
 
+	// 3.7) 5B.4a：Redis 横切（缓存 / 限流 / 幂等）。不可达即降级，不阻塞启动。
+	cacheClient := cache.New(context.Background(), cfg.RedisURL)
+	defer cacheClient.Close()
+
 	// 4) HTTP。
 	st := store.New(pool)
 	router := httpx.NewRouter(&httpx.API{
-		Pool:        pool,
-		Agent:       agentcli.New(cfg.AgentBaseURL),
-		Metrics:     metrics.NewService(pool),
-		Store:       st,
-		AI:          aiclient.New(cfg.AIServiceBaseURL, cfg.AIRequestTimeout),
-		AIProxy:     aiProxy,
-		LegacyProxy: legacyProxy,
-		LegacyBase:  cfg.LegacyPyBaseURL,
-		K8s:         k8sCollector,
-		K8sErr:      k8sErrStr,
-		Serving:     servingScraper,
-		Cadvisor:    metrics.NewCadvisorCollector(cfg.CadvisorURL),
-		CORSOrigins: cfg.CORSOrigins,
+		Pool:           pool,
+		Agent:          agentcli.New(cfg.AgentBaseURL),
+		Metrics:        metrics.NewService(pool),
+		Store:          st,
+		AI:             aiclient.New(cfg.AIServiceBaseURL, cfg.AIRequestTimeout),
+		AIProxy:        aiProxy,
+		LegacyProxy:    legacyProxy,
+		LegacyBase:     cfg.LegacyPyBaseURL,
+		K8s:            k8sCollector,
+		K8sErr:         k8sErrStr,
+		Serving:        servingScraper,
+		Cadvisor:       metrics.NewCadvisorCollector(cfg.CadvisorURL),
+		CORSOrigins:    cfg.CORSOrigins,
+		Cache:          cacheClient,
+		CacheTTL:       cfg.CacheTTL,
+		IdempotencyTTL: cfg.IdempotencyTTL,
+		RateLimitRPS:   cfg.RateLimitRPS,
+		RateLimitBurst: cfg.RateLimitBurst,
 	})
 
 	// 4.5) 后台任务（随关机一并停止）：服务注册表 reaper（5B.2）+ vLLM 指标抓取（Option A）。

@@ -22,6 +22,11 @@ type Config struct {
 	ServingScrape    time.Duration // Phase 5/Option A：抓取 vLLM Prometheus 指标的周期
 	VLLMMetricsPort  string        // vLLM /metrics 端口（默认 8000）
 	CadvisorURL      string        // cAdvisor Prometheus metrics URL
+	RedisURL         string        // 5B.4a：Redis DSN（空=禁用，全降级）
+	CacheTTL         time.Duration // 5B.4a：cache-aside 默认 TTL
+	IdempotencyTTL   time.Duration // 5B.4a：幂等键 TTL
+	RateLimitRPS     float64       // 5B.4a：令牌桶速率（令牌/秒/IP；<=0 关闭）
+	RateLimitBurst   int           // 5B.4a：令牌桶容量
 }
 
 func Load() Config {
@@ -39,7 +44,32 @@ func Load() Config {
 		ServingScrape:    envSeconds("SERVING_SCRAPE_SECONDS", 10*time.Second),
 		VLLMMetricsPort:  env("VLLM_METRICS_PORT", "8000"),
 		CadvisorURL:      env("CADVISOR_URL", "http://127.0.0.1:18080/metrics"),
+		RedisURL:         env("REDIS_URL", ""),
+		CacheTTL:         envSeconds("CACHE_TTL_SECONDS", 5*time.Second),
+		IdempotencyTTL:   envSeconds("IDEMPOTENCY_TTL_SECONDS", 600*time.Second),
+		RateLimitRPS:     envFloat("RATE_LIMIT_RPS", 50),
+		RateLimitBurst:   envInt("RATE_LIMIT_BURST", 100),
 	}
+}
+
+// envInt 读取整数 env，缺省/非法时取 def。
+func envInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return def
+}
+
+// envFloat 读取浮点 env，缺省/非法时取 def。
+func envFloat(key string, def float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
+	}
+	return def
 }
 
 // envSeconds 读取以秒为单位的时长 env，缺省/非法时取 def。

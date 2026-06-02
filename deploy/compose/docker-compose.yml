@@ -33,6 +33,17 @@ services:
       timeout: 5s
       retries: 10
 
+  # 5B.4a：Redis 横切（缓存 / 限流 / 幂等）。缓存型，无需持久化卷；不可达时 go-server 全降级。
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   go-server:
     build:
       context: ../../server
@@ -51,6 +62,8 @@ services:
       LEGACY_PYTHON_BASE_URL: http://legacy-python:8088
       # cAdvisor 由 scripts/start_cadvisor_observability.sh 在宿主 18080 做 port-forward。
       CADVISOR_URL: http://host.docker.internal:18080/metrics
+      # 5B.4a：Redis 横切（缓存 / 限流 / 幂等）；空则全降级。
+      REDIS_URL: redis://redis:6379
     ports:
       - "8081:8081"
     extra_hosts:
@@ -66,6 +79,8 @@ services:
       postgres:
         condition: service_healthy
       legacy-python:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     # 运行期为 distroless/static（无 shell），故不配 wget 健康检查；以 depends_on 控制顺序。
 
