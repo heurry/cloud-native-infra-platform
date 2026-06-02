@@ -50,6 +50,26 @@ type ChunkHit struct {
 	Distance float64
 }
 
+// DocumentMeta 是文档列表项（不含正文/向量）。
+type DocumentMeta struct {
+	DocID         string
+	Title         string
+	Category      string
+	Version       string
+	EffectiveFrom *string
+	SourceURI     *string
+	CreatedAt     time.Time
+}
+
+// DocHit 是文档级向量检索命中（取该文档最相关切块的距离；Score=1-距离，越大越相关）。
+type DocHit struct {
+	DocID    string
+	Title    string
+	Category string
+	Version  string
+	Score    float64
+}
+
 // vectorLiteral 把向量编码为 pgvector 文本字面量 "[f1,f2,...]"（配合 $N::vector 转换）。
 func vectorLiteral(v []float32) string {
 	var b strings.Builder
@@ -141,6 +161,58 @@ func (s *Store) ReplaceChunks(ctx context.Context, docID, version string, chunks
 		}
 	}
 	return tx.Commit(ctx)
+}
+
+// ListDocuments 列出文档元数据（按创建时间倒序，复刻 legacy GET /api/knowledge/documents）。
+func (s *Store) ListDocuments(ctx context.Context, limit int) ([]DocumentMeta, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT doc_id, title, category, effective_from, version, source_uri, created_at
+		  FROM kb_documents ORDER BY created_at DESC LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []DocumentMeta{}
+	for rows.Next() {
+		var d DocumentMeta
+		if err := rows.Scan(&d.DocID, &d.Title, &d.Category, &d.EffectiveFrom, &d.Version, &d.SourceURI, &d.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+// SearchDocuments 文档级余弦检索：取每个文档最相关切块的距离，返回 top-k（Score=1-距离）。
+func (s *Store) SearchDocuments(ctx context.Context, queryEmbedding []float32, version string, k int) ([]DocHit, error) {
+	if k <= 0 {
+		k = 5
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT d.doc_id, d.title, d.category, d.version, MIN(c.embedding <=> $1::vector) AS distance
+		  FROM kb_chunks c JOIN kb_documents d ON d.doc_id = c.doc_id
+		 WHERE c.embedding IS NOT NULL AND ($2 = '' OR c.version = $2)
+		 GROUP BY d.doc_id, d.title, d.category, d.version
+		 ORDER BY distance
+		 LIMIT $3`, vectorLiteral(queryEmbedding), version, k)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []DocHit{}
+	for rows.Next() {
+		var h DocHit
+		var dist float64
+		if err := rows.Scan(&h.DocID, &h.Title, &h.Category, &h.Version, &dist); err != nil {
+			return nil, err
+		}
+		h.Score = 1 - dist
+		out = append(out, h)
+	}
+	return out, rows.Err()
 }
 
 // SearchChunks 按查询向量做余弦近邻检索（version 为空=不限版本）；只返回已嵌入的切块。

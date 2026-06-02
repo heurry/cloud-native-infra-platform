@@ -13,11 +13,10 @@ import (
 // 维护规则：当某前缀的端点迁到 Go 原生实现（或迁入新 AI 服务）后，从本表移除。
 var legacyProxyPrefixes = []string{
 	"aiops",      // AIOps Copilot 流式问答
-	"knowledge",  // RAG 知识库（documents/search/rebuild-index）
 	"benchmarks", // 压测任务（serving/{id}/events）
-	"chat",       // 客服对话会话
-	"evals",      // 离线评测结果
-	// 6A 已绞杀（Go 原生）：models（GET /api/models）、proxy（POST /api/proxy/{id}/v1/chat/completions）。
+	"chat",       // 客服对话会话（messages:stream 是 RAG 管线，随本组之后绞杀）
+	"evals",      // 离线评测结果（依赖 knowledge 检索）
+	// 6A 已绞杀（Go 原生）：models、proxy、knowledge（语料=基准测试日志，pgvector 检索）。
 }
 
 // NewRouter 构建带中间件链与 /api 路由组的 chi 路由器。
@@ -100,6 +99,16 @@ func NewRouter(a *API) *chi.Mux {
 		// 6A：models / proxy 组 Go 原生（取代 legacy 反代）。
 		r.Get("/models", a.models)
 		r.Post("/proxy/{endpoint_id}/v1/chat/completions", a.proxyChatCompletions)
+
+		// 6A：knowledge 组 Go 原生（pgvector RAG；语料=基准测试日志，方案 A）。
+		r.Route("/knowledge", func(r chi.Router) {
+			r.Get("/versions", a.knowledgeVersions)
+			r.Post("/versions", a.createKnowledgeVersion)
+			r.Get("/documents", a.knowledgeDocuments)
+			r.Post("/documents", a.createKnowledgeDocument)
+			r.Post("/rebuild-index", a.rebuildKnowledgeIndex)
+			r.Get("/search", a.knowledgeSearch)
+		})
 
 		// Phase 3：AI 边界（Go 取证 → Python 推理 → Go 落库+审计）。
 		r.Route("/ai", func(r chi.Router) {
