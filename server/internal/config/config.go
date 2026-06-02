@@ -22,6 +22,12 @@ type Config struct {
 	ServingScrape    time.Duration // Phase 5/Option A：抓取 vLLM Prometheus 指标的周期
 	VLLMMetricsPort  string        // vLLM /metrics 端口（默认 8000）
 	CadvisorURL      string        // cAdvisor Prometheus metrics URL
+	S3Endpoint       string        // 5B.4b：对象存储 endpoint（host:port，空=禁用）
+	S3AccessKey      string        // 5B.4b：S3 access key
+	S3SecretKey      string        // 5B.4b：S3 secret key
+	S3Bucket         string        // 5B.4b：bucket（默认 infra-artifacts）
+	S3UseSSL         bool          // 5B.4b：是否 TLS
+	S3PresignTTL     time.Duration // 5B.4b：预签名 URL 有效期
 }
 
 func Load() Config {
@@ -39,7 +45,23 @@ func Load() Config {
 		ServingScrape:    envSeconds("SERVING_SCRAPE_SECONDS", 10*time.Second),
 		VLLMMetricsPort:  env("VLLM_METRICS_PORT", "8000"),
 		CadvisorURL:      env("CADVISOR_URL", "http://127.0.0.1:18080/metrics"),
+		S3Endpoint:       env("S3_ENDPOINT", ""),
+		S3AccessKey:      env("S3_ACCESS_KEY", "minioadmin"),
+		S3SecretKey:      env("S3_SECRET_KEY", "minioadmin"),
+		S3Bucket:         env("S3_BUCKET", "infra-artifacts"),
+		S3UseSSL:         envBool("S3_USE_SSL", false),
+		S3PresignTTL:     envSeconds("S3_PRESIGN_TTL_SECONDS", 15*time.Minute),
 	}
+}
+
+// envBool 读取布尔 env，缺省/非法时取 def。
+func envBool(key string, def bool) bool {
+	if v := os.Getenv(key); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
+		}
+	}
+	return def
 }
 
 // envSeconds 读取以秒为单位的时长 env，缺省/非法时取 def。

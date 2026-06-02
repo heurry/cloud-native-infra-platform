@@ -13,6 +13,7 @@ import (
 
 	"github.com/heurry/cloudnative-infra-platform/server/internal/agentcli"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/aiclient"
+	"github.com/heurry/cloudnative-infra-platform/server/internal/blob"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/k8s"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/metrics"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/serving"
@@ -36,6 +37,9 @@ type API struct {
 	Serving     *serving.Scraper // Phase 5 / Option A：vLLM Prometheus 指标抓取器（nil=未启用）
 	Cadvisor    *metrics.CadvisorCollector
 	CORSOrigins []string
+	// 5B.4b：对象存储（基准报告/评测产物/知识源文件）。Blob 为 nil 或禁用时降级。
+	// 写入点随 6A（benchmarks/evals/knowledge 变 Go 原生）接入。
+	Blob *blob.Client
 }
 
 // ---- GET /api/service-instances（复刻 ServiceInstanceController.listServiceInstances） ----

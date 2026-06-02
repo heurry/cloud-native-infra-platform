@@ -1,0 +1,86 @@
+{{- if .Values.objectstore.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cip.fullname" . }}-minio
+  labels:
+    {{- include "cip.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.objectstore.service.apiPort }}
+      targetPort: 9000
+      name: s3
+    - port: {{ .Values.objectstore.service.consolePort }}
+      targetPort: 9001
+      name: console
+  selector:
+    {{- include "cip.selectorLabels" (dict "root" . "component" "minio") | nindent 4 }}
+{{- if .Values.objectstore.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "cip.fullname" . }}-miniodata
+  labels:
+    {{- include "cip.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: {{ .Values.objectstore.persistence.size }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cip.fullname" . }}-minio
+  labels:
+    {{- include "cip.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "cip.selectorLabels" (dict "root" . "component" "minio") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cip.selectorLabels" (dict "root" . "component" "minio") | nindent 8 }}
+    spec:
+      containers:
+        - name: minio
+          image: "{{ .Values.objectstore.image.repository }}:{{ .Values.objectstore.image.tag }}"
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          args: ["server", "/data", "--console-address", ":9001"]
+          env:
+            - name: MINIO_ROOT_USER
+              value: {{ .Values.objectstore.auth.accessKey | quote }}
+            - name: MINIO_ROOT_PASSWORD
+              value: {{ .Values.objectstore.auth.secretKey | quote }}
+          ports:
+            - containerPort: 9000
+              name: s3
+            - containerPort: 9001
+              name: console
+          readinessProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: 9000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            {{- toYaml .Values.objectstore.resources | nindent 12 }}
+      volumes:
+        - name: data
+        {{- if .Values.objectstore.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "cip.fullname" . }}-miniodata
+        {{- else }}
+          emptyDir: {}
+        {{- end }}
+{{- end }}
