@@ -12,8 +12,9 @@ import (
 // legacyProxyPrefixes 是 Python 单体仍拥有、需经 Go 反向代理透传的 /api 前缀。
 // 维护规则：当某前缀的端点迁到 Go 原生实现（或迁入新 AI 服务）后，从本表移除。
 var legacyProxyPrefixes = []string{
-	"aiops", // AIOps Copilot（在 feat/6a-aiops/#54 退役，未并入 main）
-	// 6A 已绞杀（Go 原生）：models、proxy、benchmarks、knowledge、evals(#52)、chat(#53)。
+	// 6A 全部完成 → 列表为空，Go 控制面不再反代 Python 单体（6B 将删除 legacy-python）：
+	//   models / proxy / benchmarks / knowledge / evals(#52) / chat(#53) 已 Go 原生绞杀；
+	//   aiops(#54) 已退役（遗留子应用，前端不消费，由 /api/ai/* + /api/chat + /api/benchmarks 取代，走 404）。
 }
 
 // NewRouter 构建带中间件链与 /api 路由组的 chi 路由器。
