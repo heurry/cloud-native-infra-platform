@@ -14,8 +14,7 @@ import (
 var legacyProxyPrefixes = []string{
 	"aiops", // AIOps Copilot 流式问答
 	"chat",  // 客服对话会话（messages:stream 是 RAG 管线，随后续绞杀）
-	"evals", // 离线评测结果（依赖 knowledge 检索）
-	// 6A 已绞杀（Go 原生）：models、proxy、benchmarks、knowledge。
+	// 6A 已绞杀（Go 原生）：models、proxy、benchmarks、knowledge、evals。
 }
 
 // NewRouter 构建带中间件链与 /api 路由组的 chi 路由器。
@@ -101,6 +100,10 @@ func NewRouter(a *API) *chi.Mux {
 		r.Post("/benchmarks/serving", a.createServingBenchmark)
 		r.Get("/benchmarks/{run_id}", a.benchmarkRun)
 		r.Get("/benchmarks/{run_id}/events", a.benchmarkEvents)
+
+		// 6A：evals 组 Go 原生（检索召回评测；依赖 knowledge 检索）。
+		r.Post("/evals/customer-support", a.createCustomerSupportEval)
+		r.Get("/evals/{run_id}", a.evalRun)
 
 		// 6A：knowledge 组 Go 原生（pgvector RAG；语料=基准测试日志，方案 A）。
 		r.Route("/knowledge", func(r chi.Router) {
