@@ -26,8 +26,6 @@ MINIKUBE_MODEL_PATH="${MINIKUBE_MODEL_PATH:-${ROOT_DIR}/model/Qwen3.5-4B}"
 AIBRIX_VERSION="${AIBRIX_VERSION:-v0.6.0}"
 SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-qwen3-4b-customer}"
 AIBRIX_PORT="${AIBRIX_PORT:-8010}"
-API_PORT="${API_PORT:-8088}"
-WEB_PORT="${WEB_PORT:-5173}"
 CADVISOR_PORT="${CADVISOR_PORT:-18080}"
 CADVISOR_TIMEOUT="${CADVISOR_TIMEOUT:-120s}"
 START_MINIKUBE_IF_STOPPED="${START_MINIKUBE_IF_STOPPED:-1}"
@@ -38,10 +36,6 @@ MINIKUBE_IMAGE_REPOSITORY="${MINIKUBE_IMAGE_REPOSITORY:-}"
 NVIDIA_PLUGIN_VERSION="${NVIDIA_PLUGIN_VERSION:-v0.17.1}"
 NVIDIA_PLUGIN_IMAGE="${NVIDIA_PLUGIN_IMAGE:-}"
 GPU_ALLOCATABLE_TIMEOUT="${GPU_ALLOCATABLE_TIMEOUT:-120}"
-RESTART_API="${RESTART_API:-1}"
-RESTART_WEB="${RESTART_WEB:-1}"
-SEED_DEMO="${SEED_DEMO:-1}"
-SKIP_WEB="${SKIP_WEB:-0}"
 ENABLE_CADVISOR="${ENABLE_CADVISOR:-1}"
 SKIP_IMAGE_PREFETCH="${SKIP_IMAGE_PREFETCH:-0}"
 SKIP_IMAGE_BUILD="${SKIP_IMAGE_BUILD:-0}"
@@ -51,7 +45,6 @@ SYNC_MODEL="${SYNC_MODEL:-1}"
 VLLM_IMAGE="${VLLM_IMAGE:-local/vllm-openai:qwen35-v0.19.1-deepepfix}"
 VLLM_DOCKERFILE="${VLLM_DOCKERFILE:-deploy/aibrix/Dockerfile.vllm-qwen35}"
 STACK_TMPDIR="${STACK_TMPDIR:-/mnt/nvme-data/tmp}"
-APP_SQLITE_PATH="${APP_SQLITE_PATH:-runs/app/customer_support.db}"
 
 if ! mkdir -p "${STACK_TMPDIR}" 2>/dev/null || [[ ! -w "${STACK_TMPDIR}" ]]; then
   printf '[WARN] STACK_TMPDIR is not writable: %s. Falling back to %s/runs/tmp\n' "${STACK_TMPDIR}" "${ROOT_DIR}" >&2
@@ -440,60 +433,7 @@ start_direct_round_robin_port_forwards() {
   ss -ltnp | rg '127.0.0.1:8000|127.0.0.1:8001'
 }
 
-start_api() {
-  if [[ "${RESTART_API}" = "1" ]]; then
-    kill_port "${API_PORT}"
-  fi
-  if ss -ltnp 2>/dev/null | grep -q "127.0.0.1:${API_PORT}"; then
-    log "API is already listening on 127.0.0.1:${API_PORT}"
-  else
-    log "starting FastAPI on 127.0.0.1:${API_PORT}"
-    nohup bash scripts/serve_api.sh > "${LOG_DIR}/api.log" 2>&1 &
-    echo "$!" > "${LOG_DIR}/api.pid"
-  fi
-  wait_http "http://127.0.0.1:${API_PORT}/api/health" 180
-}
-
-start_web() {
-  if [[ "${SKIP_WEB}" = "1" ]]; then
-    log "SKIP_WEB=1, skip React dashboard"
-    return 0
-  fi
-  if [[ "${RESTART_WEB}" = "1" ]]; then
-    kill_port "${WEB_PORT}"
-  fi
-  if ss -ltnp 2>/dev/null | grep -q "127.0.0.1:${WEB_PORT}"; then
-    log "web is already listening on 127.0.0.1:${WEB_PORT}"
-  else
-    log "starting React dashboard on 127.0.0.1:${WEB_PORT}"
-    nohup bash scripts/serve_web.sh > "${LOG_DIR}/web.log" 2>&1 &
-    echo "$!" > "${LOG_DIR}/web.pid"
-  fi
-  wait_http "http://127.0.0.1:${WEB_PORT}" 240
-}
-
-smoke_test() {
-  log "checking FastAPI service instance"
-  run curl -fsS -X POST "http://127.0.0.1:${API_PORT}/api/service-instances/aibrix-gateway/healthcheck"
-
-  log "running FastAPI -> AIBrix chat smoke test"
-  local session_id
-  session_id="$(
-    curl -fsS -X POST "http://127.0.0.1:${API_PORT}/api/chat/sessions" \
-      -H "Content-Type: application/json" \
-      -d '{"title":"aibrix 4b smoke","user_role":"customer"}' \
-      | "${PYTHON_BIN}" -c "import sys,json; print(json.load(sys.stdin)['session_id'])"
-  )"
-  curl -fsS -N -X POST "http://127.0.0.1:${API_PORT}/api/chat/sessions/${session_id}/messages:stream" \
-    -H "Content-Type: application/json" \
-    -d '{"content":"退款规则是什么？","endpoint_id":"aibrix-gateway","max_tokens":64}' \
-    | tee "${LOG_DIR}/chat_smoke.sse"
-  grep -q 'event: done' "${LOG_DIR}/chat_smoke.sse"
-  grep -q '"status": "ok"' "${LOG_DIR}/chat_smoke.sse"
-}
-
 main() {
-  PYTHON_BIN="$(resolve_python_bin)"
   log "log_dir=${LOG_DIR}"
   log "model_path=${MODEL_PATH}"
   log "model_real_path=${MODEL_REAL_PATH}"
@@ -523,23 +463,14 @@ main() {
   start_direct_round_robin_port_forwards
   start_aibrix_port_forward
   start_cadvisor_observability
-  start_api
-
-  if [[ "${SEED_DEMO}" = "1" ]]; then
-    log "seeding demo customer-support data"
-    run "${PYTHON_BIN}" scripts/seed_customer_support_demo.py --run-eval
-  fi
-
-  start_web
-  smoke_test
   capture_diagnostics "success"
 
-  log "AIBrix 4B stack is ready"
-  log "API: http://127.0.0.1:${API_PORT}"
-  log "Web: http://127.0.0.1:${WEB_PORT}"
+  log "AIBrix 4B serving layer is ready"
   log "AIBrix Gateway: http://127.0.0.1:${AIBRIX_PORT}/v1"
-  log "cAdvisor: ${CADVISOR_URL}"
-  log "Logs: ${LOG_DIR}"
+  log "vLLM replicas:  http://127.0.0.1:8000  http://127.0.0.1:8001"
+  log "cAdvisor:       ${CADVISOR_URL}"
+  log "Logs:           ${LOG_DIR}"
+  log "Next: bring up the Go control plane + dashboard with scripts/run_full_stack.sh"
 }
 
 main "$@"

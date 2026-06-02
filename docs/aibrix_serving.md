@@ -32,44 +32,48 @@ OpenAI-compatible client
 
 ## Benchmark Modes
 
+压测由 Go 控制面**进程内 runner** 驱动（取代历史的 `scripts/11_benchmark_serving.py` 子进程），统一经服务实例路由到直连 vLLM 或 AIBrix Gateway。提交后通过 SSE 实时回传分级进度，结果落库并归档到 MinIO。
+
 直连 vLLM baseline：
 
 ```bash
-python scripts/11_benchmark_serving.py \
-  --endpoint_label vllm-direct \
-  --base_url http://127.0.0.1:8000/v1 \
-  --model qwen3-4b-customer \
-  --concurrency_levels 1,2,4,8,16 \
-  --requests_per_level 32 \
-  --prompt_profile mixed \
-  --output_json runs/serve/vllm_direct_benchmark.json \
-  --output_report runs/serve/vllm_direct_benchmark.md
+curl -fsS -X POST http://127.0.0.1:8081/api/benchmarks/serving \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "endpoint_id": "vllm-direct",
+        "workload": "mixed",
+        "routing_strategy": "direct",
+        "concurrency_levels": [1,2,4,8,16],
+        "requests_per_level": 32,
+        "max_tokens": 128
+      }'
 ```
 
-AIBrix Gateway benchmark：
+AIBrix Gateway benchmark（model-aware routing）：
 
 ```bash
-bash scripts/17_benchmark_aibrix_gateway.sh
+curl -fsS -X POST http://127.0.0.1:8081/api/benchmarks/serving \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "endpoint_id": "aibrix-gateway",
+        "workload": "mixed",
+        "routing_strategy": "least-request",
+        "concurrency_levels": [1,2,4,8,16],
+        "requests_per_level": 32,
+        "max_tokens": 128
+      }'
 ```
 
-等价展开命令：
+进度与结果：
 
 ```bash
-python scripts/11_benchmark_serving.py \
-  --endpoint_label aibrix \
-  --base_url http://127.0.0.1:8000/v1 \
-  --model qwen3-4b-customer \
-  --concurrency_levels 1,2,4,8,16 \
-  --requests_per_level 32 \
-  --routing_strategy least-request \
-  --prompt_profile mixed \
-  --output_json runs/serve/aibrix_gateway_benchmark.json \
-  --output_report runs/serve/aibrix_gateway_benchmark.md
+curl -N http://127.0.0.1:8081/api/benchmarks/<run_id>/events   # SSE 分级进度
+curl    http://127.0.0.1:8081/api/benchmarks/<run_id>          # 最终报告
 ```
 
 ## Metrics
 
-`scripts/11_benchmark_serving.py` 会输出 JSON 和 Markdown 报告，核心指标包括：
+每次 run 都会输出结构化报告（落库 + MinIO 归档），核心指标包括：
 
 - QPS
 - mean TTFT

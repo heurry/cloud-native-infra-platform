@@ -16,6 +16,7 @@ reports/
 logs/*.log
 logs/*.md
 logs/aibrix_4b/
+logs/full_stack/
 logs/observability/
 logs/runtime/
 logs/download_data_*.log
