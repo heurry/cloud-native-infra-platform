@@ -45,10 +45,6 @@ spec:
               value: {{ include "cip.databaseURL" . | quote }}
             - name: AI_SERVICE_BASE_URL
               value: "http://{{ include "cip.fullname" . }}-ai-service:{{ .Values.aiService.service.port }}"
-            {{- if .Values.legacyPython.enabled }}
-            - name: LEGACY_PYTHON_BASE_URL
-              value: "http://{{ include "cip.fullname" . }}-legacy-python:{{ .Values.legacyPython.service.port }}"
-            {{- end }}
             {{- if .Values.agent.enabled }}
             - name: AGENT_BASE_URL
               value: "http://{{ include "cip.fullname" . }}-agent:{{ .Values.agent.service.port }}"

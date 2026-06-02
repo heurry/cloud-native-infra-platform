@@ -40,18 +40,6 @@ aiService:
     requests: { cpu: 100m, memory: 128Mi }
     limits: { cpu: "1", memory: 512Mi }
 
-legacyPython:
-  enabled: true
-  replicas: 1
-  image:
-    repository: cloudnative-infra-platform/legacy-python
-    tag: latest
-  service:
-    port: 8088
-  resources:
-    requests: { cpu: 50m, memory: 96Mi }
-    limits: { cpu: 500m, memory: 256Mi }
-
 # 节点采集 Agent（host/gpu）。以 DaemonSet 每节点一份；默认关闭（需 host 权限/GPU）。
 agent:
   enabled: false

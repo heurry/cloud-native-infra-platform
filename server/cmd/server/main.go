@@ -47,16 +47,11 @@ func main() {
 	defer pool.Close()
 	slog.Info("db connected")
 
-	// 3) AI 边界：诊断客户端 + 两个反向代理（不可用时降级为 nil，路由跳过对应接口）。
+	// 3) AI 边界：诊断/嵌入客户端 + SSE 反向代理（不可用时降级为 nil，路由跳过对应接口）。
 	aiProxy, err := httpx.NewProxy(cfg.AIServiceBaseURL)
 	if err != nil {
 		slog.Warn("ai proxy disabled", "err", err)
 		aiProxy = nil
-	}
-	legacyProxy, err := httpx.NewProxy(cfg.LegacyPyBaseURL)
-	if err != nil {
-		slog.Warn("legacy proxy disabled", "err", err)
-		legacyProxy = nil
 	}
 
 	// 3.5) Phase 5/5B.1：控制面 client-go 直读集群（kubeconfig 加载失败时降级为 nil，
@@ -99,8 +94,6 @@ func main() {
 		Store:          st,
 		AI:             aiclient.New(cfg.AIServiceBaseURL, cfg.AIRequestTimeout),
 		AIProxy:        aiProxy,
-		LegacyProxy:    legacyProxy,
-		LegacyBase:     cfg.LegacyPyBaseURL,
 		K8s:            k8sCollector,
 		K8sErr:         k8sErrStr,
 		Serving:        servingScraper,

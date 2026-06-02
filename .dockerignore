@@ -1,4 +1,5 @@
-# 仅 legacy-python.Dockerfile 使用仓库根作为构建上下文；排除大目录避免上下文膨胀。
+# 仓库根作为 docker 构建上下文时排除大目录，避免上下文膨胀。
+# （legacy-python 单体已于 6B 退役；当前镜像构建用各自子目录上下文：server/ agent/ apps/ai-service/。）
 runs/
 model/
 node_modules/
