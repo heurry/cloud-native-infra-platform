@@ -12,19 +12,20 @@
 
 ![平台总览界面](docs/images/dashboard.png)
 
-当前项目采用 **Go-primary** 架构：React 控制台只对接 Go 控制面 API；Go 负责平台治理、PostgreSQL 数据、Kubernetes/Agent 访问、审计和可观测聚合；Python AI Service 提供结构化诊断与 Copilot 推理；legacy Python API 仅保留知识库、压测和演示工作负载的迁移期能力。
+当前项目采用 **Go-primary** 架构：React 控制台只对接 Go 控制面 API；Go 负责平台治理、PostgreSQL 数据、Kubernetes/Agent 访问、审计、可观测聚合，以及原生的知识库 RAG、压测 runner 和流式 Copilot；Python AI Service 仅提供结构化诊断与 LLM/Embedding 推理。Java 后端与 legacy Python 单体（`src/`）已全部退役，所有 `/api/*` 均由 Go 原生提供（或经 AI Service）。
 
 ## Architecture
 
 ```text
 React / Vite Console
-  -> Go Control Plane API (:8081)
+  -> Go Control Plane API (:8081)   ← single entry; every /api is Go-native
        ├─ Config / deployments / incidents / audit / metrics / platform overview
-       ├─ Kubernetes snapshot via Go Agent (:8090)
-       ├─ /api/ai/* -> Python AI Service (:8200)
-       └─ legacy service facade -> Python API (:8088)
+       ├─ Models / proxy / benchmarks / knowledge (pgvector RAG) / evals / chat
+       ├─ Kubernetes snapshot via client-go + Go Agent (:8090)
+       └─ /api/ai/* -> Python AI Service (:8200, diagnose + LLM/embed)
 
-PostgreSQL stores platform control-plane data.
+PostgreSQL (+ pgvector) stores control-plane data and RAG embeddings.
+Redis backs cache / rate-limit / idempotency; MinIO holds benchmark & eval artifacts.
 AIBrix / vLLM provide OpenAI-compatible model serving for AIOps and benchmark flows.
 ```
 
@@ -35,9 +36,9 @@ AIBrix / vLLM provide OpenAI-compatible model serving for AIOps and benchmark fl
 - 服务治理：模型服务实例、运行时健康、Gateway / vLLM 路由状态。
 - 发布流水线：发布记录、Canary 状态、回滚入口和 SLO / Benchmark 门禁。
 - 可观测监控：请求延迟、TTFT、吞吐、主机资源、GPU、cAdvisor 和 Kubernetes 快照。
-- 知识库 / RAG：文档导入、检索、索引重建和业务 Demo 问答。
+- 知识库 / RAG：基准测试日志入库、pgvector 向量检索、索引重建和检索增强问答（Go 原生）。
 - AI Ops：Go 聚合证据，Python AI Service 生成根因、影响面、证据和建议动作。
-- 设置页：API、Agent、AI Service、Legacy Proxy 健康探测和本地配置编辑。
+- 设置页：API、Agent、AI Service 健康探测和本地配置编辑。
 
 ## 界面预览
 
@@ -55,18 +56,12 @@ AIBrix / vLLM provide OpenAI-compatible model serving for AIOps and benchmark fl
 
 ```text
 apps/web/          React/Vite 控制台
-server/            Go 控制面 API
+server/            Go 控制面 API（单一入口，全部 /api 原生）
 agent/             Go Node/Kubernetes 采集代理
-apps/ai-service/   Python AI 诊断与 Copilot 服务
-src/api/           legacy Python facade，承接知识库、压测和 Demo API
-src/customer_support/
-src/jobs/
-src/metrics/
-src/rag/
-src/serve/         Python 侧服务调用与系统快照辅助
-configs/app/       应用运行配置
+apps/ai-service/   Python AI 诊断与 LLM/Embedding 服务
 configs/serve/     vLLM / AIBrix / 模型服务配置
-deploy/            compose、AIBrix、observability 部署文件
+deploy/            compose、Helm、AIBrix、observability 部署文件
+scripts/           AIBrix/vLLM 服务层与一键启动脚本
 docs/              当前平台设计、部署和归位说明
 docs/images/       控制台各页面截图
 ```
@@ -81,16 +76,13 @@ docker compose -f deploy/compose/docker-compose.yml up -d --build
 
 Compose 会启动：
 
-- PostgreSQL `:5432`
+- PostgreSQL (+ pgvector) `:5432`
+- Redis `:6379`、MinIO `:9000/:9001`
 - Go control plane `:8081`
 - Python AI Service `:8200`
 - Go Agent `:8090`
 
-迁移期 legacy Python API 可以单独启动：
-
-```bash
-bash scripts/serve_api.sh
-```
+> 需要连同 AIBrix/vLLM 服务层一起拉起时，先跑 `bash scripts/run_aibrix_4b_stack.sh`（minikube + AIBrix + vLLM + cAdvisor），再用 `bash scripts/run_full_stack.sh` 一键起 Go 控制面与前端。
 
 ### 2. 启动前端控制台
 
