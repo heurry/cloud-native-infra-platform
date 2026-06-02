@@ -18,7 +18,8 @@ name: cloudnative-infra-platform
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # 5B.4c：pgvector/pgvector:pg16（带 vector 扩展）；migration 000006 建 vector 列/索引需要它。
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_DB: infra_platform
       POSTGRES_USER: infra

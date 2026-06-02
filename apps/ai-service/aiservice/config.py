@@ -22,6 +22,8 @@ class Config:
     default_temperature: float
     host: str
     port: int
+    embed_model: str        # 5B.4c：嵌入模型（默认 Qwen3-Embedding-0.6B）
+    embed_dim: int          # 5B.4c：嵌入维度（Qwen3-Embedding-0.6B = 1024）
 
 
 def load_config() -> Config:
@@ -35,4 +37,6 @@ def load_config() -> Config:
         default_temperature=float(_env("AI_DEFAULT_TEMPERATURE", "0.2")),
         host=_env("AI_SERVICE_HOST", "0.0.0.0"),
         port=int(_env("AI_SERVICE_PORT", "8200")),
+        embed_model=_env("AI_EMBED_MODEL", "qwen3-embedding-0.6b"),
+        embed_dim=int(_env("AI_EMBED_DIM", "1024")),
     )

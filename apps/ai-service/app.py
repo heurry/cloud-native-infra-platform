@@ -4,6 +4,7 @@ Endpoints (all under /internal, reached via the Go control plane, not the browse
   GET  /internal/health        —— 存活 + 当前模式（stub/live）
   POST /internal/diagnose      —— 结构化诊断（Go 取证 → 本服务推理 → 结构化 JSON）
   POST /internal/chat:stream   —— SSE 流式问答（Go 反向代理透传给前端 Copilot）
+  POST /internal/embed         —— 文本嵌入（5B.4c：RAG 切块/查询向量，Qwen3-Embedding-0.6B）
 """
 
 from __future__ import annotations
@@ -16,8 +17,9 @@ from fastapi.responses import StreamingResponse
 from aiservice import __version__
 from aiservice.config import load_config
 from aiservice.diagnose import run_diagnose
+from aiservice.embed import embed_texts
 from aiservice.llm import sse_event, stream_chat_completion
-from aiservice.schemas import ChatRequest, DiagnoseRequest, DiagnoseResponse
+from aiservice.schemas import ChatRequest, DiagnoseRequest, DiagnoseResponse, EmbedRequest, EmbedResponse
 
 cfg = load_config()
 app = FastAPI(title="CloudNative Infra Platform AI Service", version=__version__)
@@ -43,6 +45,12 @@ def diagnose(req: DiagnoseRequest) -> DiagnoseResponse:
 @app.post("/internal/chat:stream")
 def chat_stream(req: ChatRequest) -> StreamingResponse:
     return StreamingResponse(_chat_events(req), media_type="text/event-stream")
+
+
+@app.post("/internal/embed", response_model=EmbedResponse)
+def embed(req: EmbedRequest) -> EmbedResponse:
+    vectors, mode = embed_texts(req.texts, req.is_query, cfg)
+    return EmbedResponse(embeddings=vectors, model=cfg.embed_model, dim=cfg.embed_dim, mode=mode)
 
 
 # ---- chat streaming helpers ----
