@@ -67,6 +67,7 @@ type DocHit struct {
 	Title    string
 	Category string
 	Version  string
+	Content  string // 6A chat：RAG 上下文块需要正文
 	Score    float64
 }
 
@@ -191,13 +192,16 @@ func (s *Store) SearchDocuments(ctx context.Context, queryEmbedding []float32, v
 	if k <= 0 {
 		k = 5
 	}
+	// 先按 doc_id 取最相关切块距离的 top-k，再 join 文档拿元数据 + 正文（避免 GROUP BY 大文本）。
 	rows, err := s.pool.Query(ctx, `
-		SELECT d.doc_id, d.title, d.category, d.version, MIN(c.embedding <=> $1::vector) AS distance
-		  FROM kb_chunks c JOIN kb_documents d ON d.doc_id = c.doc_id
-		 WHERE c.embedding IS NOT NULL AND ($2 = '' OR c.version = $2)
-		 GROUP BY d.doc_id, d.title, d.category, d.version
-		 ORDER BY distance
-		 LIMIT $3`, vectorLiteral(queryEmbedding), version, k)
+		SELECT d.doc_id, d.title, d.category, d.version, d.content, t.distance
+		  FROM (
+			SELECT doc_id, MIN(embedding <=> $1::vector) AS distance
+			  FROM kb_chunks
+			 WHERE embedding IS NOT NULL AND ($2 = '' OR version = $2)
+			 GROUP BY doc_id ORDER BY distance LIMIT $3
+		  ) t JOIN kb_documents d ON d.doc_id = t.doc_id
+		 ORDER BY t.distance`, vectorLiteral(queryEmbedding), version, k)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +210,7 @@ func (s *Store) SearchDocuments(ctx context.Context, queryEmbedding []float32, v
 	for rows.Next() {
 		var h DocHit
 		var dist float64
-		if err := rows.Scan(&h.DocID, &h.Title, &h.Category, &h.Version, &dist); err != nil {
+		if err := rows.Scan(&h.DocID, &h.Title, &h.Category, &h.Version, &h.Content, &dist); err != nil {
 			return nil, err
 		}
 		h.Score = 1 - dist

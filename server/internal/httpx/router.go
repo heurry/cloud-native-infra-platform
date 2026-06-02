@@ -12,9 +12,8 @@ import (
 // legacyProxyPrefixes 是 Python 单体仍拥有、需经 Go 反向代理透传的 /api 前缀。
 // 维护规则：当某前缀的端点迁到 Go 原生实现（或迁入新 AI 服务）后，从本表移除。
 var legacyProxyPrefixes = []string{
-	"aiops", // AIOps Copilot 流式问答
-	"chat",  // 客服对话会话（messages:stream 是 RAG 管线，随后续绞杀）
-	// 6A 已绞杀（Go 原生）：models、proxy、benchmarks、knowledge、evals。
+	"aiops", // AIOps Copilot（在 feat/6a-aiops/#54 退役，未并入 main）
+	// 6A 已绞杀（Go 原生）：models、proxy、benchmarks、knowledge、evals(#52)、chat(#53)。
 }
 
 // NewRouter 构建带中间件链与 /api 路由组的 chi 路由器。
@@ -104,6 +103,15 @@ func NewRouter(a *API) *chi.Mux {
 		// 6A：evals 组 Go 原生（检索召回评测；依赖 knowledge 检索）。
 		r.Post("/evals/customer-support", a.createCustomerSupportEval)
 		r.Get("/evals/{run_id}", a.evalRun)
+
+		// 6A：chat 组 Go 原生（客服 RAG 对话；会话/消息→PG，messages:stream 流式 RAG）。
+		r.Route("/chat", func(r chi.Router) {
+			r.Post("/sessions", a.createChatSession)
+			r.Get("/sessions", a.listChatSessions)
+			r.Get("/sessions/{session_id}", a.getChatSession)
+			r.Post("/sessions/{session_id}/messages:stream", a.streamChatMessage)
+			r.Post("/messages/{message_id}/feedback", a.createMessageFeedback)
+		})
 
 		// 6A：knowledge 组 Go 原生（pgvector RAG；语料=基准测试日志，方案 A）。
 		r.Route("/knowledge", func(r chi.Router) {
