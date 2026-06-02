@@ -3,12 +3,10 @@ package httpx
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"log/slog"
 	"math"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/heurry/cloudnative-infra-platform/server/internal/agentcli"
@@ -29,10 +27,8 @@ type API struct {
 	Agent       *agentcli.Client
 	Metrics     *metrics.Service
 	Store       *store.Store
-	AI          *aiclient.Client // Phase 3：调 Python /internal/diagnose
+	AI          *aiclient.Client // Phase 3：调 Python /internal/diagnose + /internal/embed
 	AIProxy     *Proxy           // Phase 3：SSE 透传到 AI 服务（chat:stream）
-	LegacyProxy *Proxy           // Phase 3：迁移期把 aiops/knowledge 透传给 Python 单体
-	LegacyBase  string           // legacy Python 单体 base URL；迁移期用于桥接 metrics/request_traces
 	K8s         *k8s.Collector   // Phase 5 / 5B.1：控制面 client-go 直读集群（nil=未配置）
 	K8sErr      string           // collector 初始化错误（降级展示用）
 	Serving     *serving.Scraper // Phase 5 / Option A：vLLM Prometheus 指标抓取器（nil=未启用）
@@ -82,7 +78,6 @@ func (a *API) serviceInstances(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, r, err)
 		return
 	}
-	instances = mergeLegacyServiceInstances(instances, a.legacyMetrics(r.Context()))
 	WriteJSON(w, http.StatusOK, map[string]any{"instances": instances})
 }
 
@@ -168,8 +163,6 @@ func (a *API) metricsCurrent(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, r, err)
 		return
 	}
-	legacyMetrics := a.legacyMetrics(ctx)
-	mergeLegacyServingMetrics(m, legacyMetrics)
 	gpuResp := a.agentGpu(ctx)
 	m["gpu"] = gpuResp["gpu"]
 	m["gpu_status"] = gpuResp["status"]
@@ -180,7 +173,7 @@ func (a *API) metricsCurrent(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, r, err)
 		return
 	}
-	m["service_instances"] = mergeLegacyServiceInstances(si, legacyMetrics)
+	m["service_instances"] = si
 	m["upstream_metrics"] = []any{}
 	m["kubernetes"] = a.k8sSnapshot(ctx, true, false, false, true, false)
 	// Option A：用真实 vLLM Prometheus 指标覆盖 serving 字段（request_traces 为空时此处提供真实值）。
@@ -211,14 +204,6 @@ func (a *API) metricsRequests(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		a.fail(w, r, err)
 		return
-	}
-	if len(reqs) == 0 {
-		if legacy := a.fetchLegacyJSON(r.Context(), "/api/metrics/requests?limit="+strconv.Itoa(limit)); legacy != nil {
-			if legacyReqs, ok := legacy["requests"].([]any); ok && len(legacyReqs) > 0 {
-				WriteJSON(w, http.StatusOK, map[string]any{"requests": legacyReqs, "source": "legacy-python"})
-				return
-			}
-		}
 	}
 	WriteJSON(w, http.StatusOK, map[string]any{"requests": reqs})
 }
@@ -266,114 +251,6 @@ func (a *API) cadvisor(ctx context.Context) any {
 		return emptyCadvisor()
 	}
 	return a.Cadvisor.Snapshot(ctx)
-}
-
-func (a *API) legacyMetrics(ctx context.Context) map[string]any {
-	return a.fetchLegacyJSON(ctx, "/api/metrics/current")
-}
-
-func (a *API) fetchLegacyJSON(ctx context.Context, path string) map[string]any {
-	if strings.TrimSpace(a.LegacyBase) == "" {
-		return nil
-	}
-	base := strings.TrimRight(a.LegacyBase, "/")
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+path, nil)
-	if err != nil {
-		return nil
-	}
-	client := http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	if err != nil {
-		return nil
-	}
-	var out map[string]any
-	if err := json.Unmarshal(body, &out); err != nil || out == nil {
-		return nil
-	}
-	return out
-}
-
-func mergeLegacyServingMetrics(dst, legacy map[string]any) {
-	if dst == nil || legacy == nil {
-		return
-	}
-	legacyCount, ok := asFloat(legacy["request_count"])
-	if !ok || legacyCount <= 0 {
-		return
-	}
-	nativeCount, _ := asFloat(dst["request_count"])
-	if nativeCount > legacyCount {
-		return
-	}
-	for _, key := range []string{
-		"request_count", "qps", "error_count", "error_rate",
-		"mean_latency_ms", "mean_ttft_ms",
-		"p50_latency_ms", "p95_latency_ms", "p99_latency_ms",
-		"p50_ttft_ms", "p95_ttft_ms", "p99_ttft_ms",
-		"p95_generation_ms",
-		"input_tokens", "output_tokens", "total_tokens", "tokens_per_second",
-		"target_pod_counts", "endpoint_counts", "status_counts", "fallback_counts",
-		"target_pod_stats", "endpoint_stats",
-	} {
-		if v, ok := legacy[key]; ok {
-			dst[key] = v
-		}
-	}
-	dst["metrics_source"] = "legacy-python/request_traces"
-}
-
-func mergeLegacyServiceInstances(native []map[string]any, legacy map[string]any) []map[string]any {
-	if legacy == nil {
-		return native
-	}
-	legacyRows := asSlice(legacy["service_instances"])
-	if len(legacyRows) == 0 {
-		return native
-	}
-	byName := map[string]map[string]any{}
-	for _, item := range legacyRows {
-		if row, ok := item.(map[string]any); ok {
-			if name := strOr(row["name"], ""); name != "" {
-				byName[name] = row
-			}
-		}
-	}
-	if len(native) == 0 {
-		out := make([]map[string]any, 0, len(byName))
-		for _, row := range byName {
-			out = append(out, row)
-		}
-		return out
-	}
-	for _, row := range native {
-		name := strOr(row["name"], "")
-		legacyRow := byName[name]
-		if legacyRow == nil {
-			continue
-		}
-		if status := strOr(row["status"], ""); status == "" || status == "unknown" {
-			if v := strOr(legacyRow["status"], ""); v != "" {
-				row["status"] = v
-			}
-		}
-		if row["last_checked_at"] == nil || strOr(row["last_checked_at"], "") == "" {
-			if v := strOr(legacyRow["last_checked_at"], ""); v != "" {
-				row["last_checked_at"] = v
-			}
-		}
-	}
-	return native
 }
 
 // ---- helpers ----

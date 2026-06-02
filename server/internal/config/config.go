@@ -13,8 +13,7 @@ type Config struct {
 	DatabaseURL      string        // pgxpool DSN：postgres://...
 	CORSOrigins      []string      // 允许的前端来源
 	AgentBaseURL     string        // Go Node Agent 地址（Phase 1 起用）
-	AIServiceBaseURL string        // Python AI 服务（Phase 3：diagnose + chat:stream）
-	LegacyPyBaseURL  string        // 迁移期 Python 单体（aiops/knowledge 反代目标）
+	AIServiceBaseURL string        // Python AI 服务（Phase 3：diagnose + chat:stream + embed）
 	AIRequestTimeout time.Duration // 调 AI 诊断的超时（含 LLM 推理，默认 90s）
 	KubeconfigPath   string        // Phase 5/5B.1：控制面 client-go 的 kubeconfig（空=in-cluster 或默认规则）
 	RegistryTTL      time.Duration // Phase 5/5B.2：心跳 TTL（超时未心跳→unreachable）
@@ -42,7 +41,6 @@ func Load() Config {
 		CORSOrigins:      splitCSV(env("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")),
 		AgentBaseURL:     env("AGENT_BASE_URL", "http://127.0.0.1:8090"),
 		AIServiceBaseURL: env("AI_SERVICE_BASE_URL", "http://127.0.0.1:8200"),
-		LegacyPyBaseURL:  env("LEGACY_PYTHON_BASE_URL", "http://127.0.0.1:8088"),
 		AIRequestTimeout: envSeconds("AI_REQUEST_TIMEOUT_SECONDS", 90*time.Second),
 		KubeconfigPath:   env("KUBECONFIG", ""),
 		RegistryTTL:      envSeconds("REGISTRY_TTL_SECONDS", 30*time.Second),

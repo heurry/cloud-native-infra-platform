@@ -4,8 +4,8 @@ Phase 5 / 5B.5：把平台打成 Helm chart，go-server 无状态多副本 + 健
 
 ## 组件
 - **go-server**：Go 控制面（单一入口），默认 **2 副本**（无状态，状态在 PostgreSQL），readiness/liveness 命中 `/api/health`；in-cluster ServiceAccount + ClusterRole 只读 pods/deployments/events/nodes/hpa（5B.1/5B.3）。
-- **ai-service**：结构化诊断 / chat:stream（探针 `/internal/health`）。
-- **legacy-python**：models/benchmarks/evals/proxy（探针 `/api/health`）。
+- **ai-service**：结构化诊断 / chat:stream / embed（探针 `/internal/health`）。
+- **redis**：横切缓存 / 限流 / 幂等（5B.4a）。**minio**：对象存储（5B.4b）。
 - **postgres**：演示自带（生产设 `postgres.enabled=false` + `postgres.external.url`）。
 - **agent**：节点 host/gpu 采集 DaemonSet，默认关闭（`agent.enabled=true` 开启）。
 
@@ -24,7 +24,6 @@ docker run --rm -v "$PWD":/work -w /work -v twf-gomod:/gomod \
 # 1) 构建镜像（见各 Dockerfile / docker-compose），并加载进 minikube：
 minikube image load cloudnative-infra-platform/go-server:latest
 minikube image load cloudnative-infra-platform/python-ai-service:latest
-minikube image load cloudnative-infra-platform/legacy-python:latest
 # 2) 安装：
 helm install cip deploy/helm/cloudnative-infra-platform -n cip --create-namespace
 # 3) 访问：
