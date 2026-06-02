@@ -27,6 +27,12 @@ type Config struct {
 	IdempotencyTTL   time.Duration // 5B.4a：幂等键 TTL
 	RateLimitRPS     float64       // 5B.4a：令牌桶速率（令牌/秒/IP；<=0 关闭）
 	RateLimitBurst   int           // 5B.4a：令牌桶容量
+	S3Endpoint       string        // 5B.4b：对象存储 endpoint（host:port，空=禁用）
+	S3AccessKey      string        // 5B.4b：S3 access key
+	S3SecretKey      string        // 5B.4b：S3 secret key
+	S3Bucket         string        // 5B.4b：bucket（默认 infra-artifacts）
+	S3UseSSL         bool          // 5B.4b：是否 TLS
+	S3PresignTTL     time.Duration // 5B.4b：预签名 URL 有效期
 }
 
 func Load() Config {
@@ -49,6 +55,12 @@ func Load() Config {
 		IdempotencyTTL:   envSeconds("IDEMPOTENCY_TTL_SECONDS", 600*time.Second),
 		RateLimitRPS:     envFloat("RATE_LIMIT_RPS", 50),
 		RateLimitBurst:   envInt("RATE_LIMIT_BURST", 100),
+		S3Endpoint:       env("S3_ENDPOINT", ""),
+		S3AccessKey:      env("S3_ACCESS_KEY", "minioadmin"),
+		S3SecretKey:      env("S3_SECRET_KEY", "minioadmin"),
+		S3Bucket:         env("S3_BUCKET", "infra-artifacts"),
+		S3UseSSL:         envBool("S3_USE_SSL", false),
+		S3PresignTTL:     envSeconds("S3_PRESIGN_TTL_SECONDS", 15*time.Minute),
 	}
 }
 
@@ -67,6 +79,16 @@ func envFloat(key string, def float64) float64 {
 	if v := os.Getenv(key); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			return f
+		}
+	}
+	return def
+}
+
+// envBool 读取布尔 env，缺省/非法时取 def。
+func envBool(key string, def bool) bool {
+	if v := os.Getenv(key); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
 		}
 	}
 	return def

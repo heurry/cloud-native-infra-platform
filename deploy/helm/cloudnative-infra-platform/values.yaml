@@ -92,6 +92,29 @@ redis:
     requests: { cpu: 25m, memory: 32Mi }
     limits: { cpu: 250m, memory: 128Mi }
 
+# 5B.4b：对象存储（S3 兼容，自带 MinIO 演示）。基准报告/评测产物/知识源文件；DB 只存 *_uri。
+# 生产可 enabled=false 并设 external.endpoint 指向托管 S3（go-server 只换 endpoint/creds）。
+objectstore:
+  enabled: true
+  image:
+    repository: minio/minio
+    tag: latest
+  bucket: infra-artifacts
+  auth:
+    accessKey: minioadmin
+    secretKey: minioadmin
+  service:
+    apiPort: 9000
+    consolePort: 9001
+  persistence:
+    enabled: true
+    size: 2Gi
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: "1", memory: 512Mi }
+  external:
+    endpoint: ""  # host:port（objectstore.enabled=false 时指向托管 S3；空=禁用对象存储）
+
 # go-server 经 client-go in-cluster 读集群（pods/deployments/events/nodes/hpa）所需 RBAC。
 rbac:
   create: true

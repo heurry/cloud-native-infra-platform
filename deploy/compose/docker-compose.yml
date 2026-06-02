@@ -44,6 +44,20 @@ services:
       timeout: 3s
       retries: 10
 
+  # 5B.4b：对象存储（S3 兼容）。基准报告/评测产物/知识源文件；DB 只存 *_uri。
+  # go-server 启动时 best-effort 建桶，不可达即降级。
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+
   go-server:
     build:
       context: ../../server
@@ -64,6 +78,11 @@ services:
       CADVISOR_URL: http://host.docker.internal:18080/metrics
       # 5B.4a：Redis 横切（缓存 / 限流 / 幂等）；空则全降级。
       REDIS_URL: redis://redis:6379
+      # 5B.4b：对象存储（compose 网络内 MinIO）；空则降级。
+      S3_ENDPOINT: minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      S3_BUCKET: infra-artifacts
     ports:
       - "8081:8081"
     extra_hosts:
@@ -82,6 +101,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      minio:
+        condition: service_started
     # 运行期为 distroless/static（无 shell），故不配 wget 健康检查；以 depends_on 控制顺序。
 
   python-ai-service:
@@ -155,3 +176,4 @@ networks:
 
 volumes:
   pgdata:
+  miniodata:

@@ -15,6 +15,7 @@ import (
 
 	"github.com/heurry/cloudnative-infra-platform/server/internal/agentcli"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/aiclient"
+	"github.com/heurry/cloudnative-infra-platform/server/internal/blob"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/cache"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/config"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/db"
@@ -79,6 +80,16 @@ func main() {
 	cacheClient := cache.New(context.Background(), cfg.RedisURL)
 	defer cacheClient.Close()
 
+	// 3.7) 5B.4b：对象存储（基准报告/评测产物/知识源文件）。endpoint 空或不可达即降级，不阻塞启动。
+	blobStore := blob.New(context.Background(), blob.Config{
+		Endpoint:   cfg.S3Endpoint,
+		AccessKey:  cfg.S3AccessKey,
+		SecretKey:  cfg.S3SecretKey,
+		Bucket:     cfg.S3Bucket,
+		UseSSL:     cfg.S3UseSSL,
+		PresignTTL: cfg.S3PresignTTL,
+	})
+
 	// 4) HTTP。
 	st := store.New(pool)
 	router := httpx.NewRouter(&httpx.API{
@@ -100,6 +111,7 @@ func main() {
 		IdempotencyTTL: cfg.IdempotencyTTL,
 		RateLimitRPS:   cfg.RateLimitRPS,
 		RateLimitBurst: cfg.RateLimitBurst,
+		Blob:           blobStore,
 	})
 
 	// 4.5) 后台任务（随关机一并停止）：服务注册表 reaper（5B.2）+ vLLM 指标抓取（Option A）。

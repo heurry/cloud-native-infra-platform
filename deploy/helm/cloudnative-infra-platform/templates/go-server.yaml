@@ -57,6 +57,25 @@ spec:
             - name: REDIS_URL
               value: "redis://{{ include "cip.fullname" . }}-redis:{{ .Values.redis.service.port }}"
             {{- end }}
+            {{- if .Values.objectstore.enabled }}
+            - name: S3_ENDPOINT
+              value: "{{ include "cip.fullname" . }}-minio:{{ .Values.objectstore.service.apiPort }}"
+            - name: S3_ACCESS_KEY
+              value: {{ .Values.objectstore.auth.accessKey | quote }}
+            - name: S3_SECRET_KEY
+              value: {{ .Values.objectstore.auth.secretKey | quote }}
+            - name: S3_BUCKET
+              value: {{ .Values.objectstore.bucket | quote }}
+            {{- else if .Values.objectstore.external.endpoint }}
+            - name: S3_ENDPOINT
+              value: {{ .Values.objectstore.external.endpoint | quote }}
+            - name: S3_ACCESS_KEY
+              value: {{ .Values.objectstore.auth.accessKey | quote }}
+            - name: S3_SECRET_KEY
+              value: {{ .Values.objectstore.auth.secretKey | quote }}
+            - name: S3_BUCKET
+              value: {{ .Values.objectstore.bucket | quote }}
+            {{- end }}
             {{- range $k, $v := .Values.goServer.env }}
             - name: {{ $k }}
               value: {{ $v | quote }}
