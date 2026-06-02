@@ -105,6 +105,52 @@ func (c *Client) Diagnose(ctx context.Context, req DiagnoseRequest) (*DiagnoseRe
 	return &out, nil
 }
 
+// EmbedRequest / EmbedResult 对齐 ai-service /internal/embed（5B.4c）。
+type embedRequest struct {
+	Texts   []string `json:"texts"`
+	IsQuery bool     `json:"is_query"`
+}
+
+type embedResult struct {
+	Embeddings [][]float32 `json:"embeddings"`
+	Model      string      `json:"model"`
+	Dim        int         `json:"dim"`
+	Mode       string      `json:"mode"`
+}
+
+// Embed 调 Python /internal/embed 取文本嵌入（is_query=true 时查询侧加 Qwen3 指令前缀）。
+// 错误分类同 Diagnose。向量响应可较大，单独放宽读取上限。
+func (c *Client) Embed(ctx context.Context, texts []string, isQuery bool) ([][]float32, error) {
+	body, err := json.Marshal(embedRequest{Texts: texts, IsQuery: isQuery})
+	if err != nil {
+		return nil, fmt.Errorf("marshal embed request: %w", err)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"/internal/embed", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrUnreachable, err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrUnreachable, err)
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20)) // 32 MiB：批量向量可观
+	if err != nil {
+		return nil, fmt.Errorf("%w: read body: %v", ErrBadResponse, err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("%w: status %d: %s", ErrBadStatus, resp.StatusCode, truncate(data, 300))
+	}
+	var out embedResult
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrBadResponse, err)
+	}
+	return out.Embeddings, nil
+}
+
 // BaseURL 暴露给反向代理（httpx/proxy.go）拼上游地址。
 func (c *Client) BaseURL() string { return c.base }
 
