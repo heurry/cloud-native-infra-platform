@@ -66,8 +66,9 @@ agent:
 postgres:
   enabled: true
   image:
-    repository: postgres
-    tag: 16-alpine
+    # 5B.4c：pgvector/pgvector:pg16（带 vector 扩展）；migration 000006 需要它。
+    repository: pgvector/pgvector
+    tag: pg16
   service:
     port: 5432
   auth:

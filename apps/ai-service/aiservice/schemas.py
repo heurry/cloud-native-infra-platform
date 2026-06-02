@@ -59,3 +59,15 @@ class ChatRequest(BaseModel):
     messages: Optional[List[Dict[str, Any]]] = None
     max_tokens: int = 1024
     temperature: float = 0.2
+
+
+class EmbedRequest(BaseModel):
+    texts: List[str]
+    is_query: bool = False  # 查询侧加 Qwen3-Embedding 指令前缀；文档侧不加
+
+
+class EmbedResponse(BaseModel):
+    embeddings: List[List[float]]
+    model: str
+    dim: int
+    mode: str = "stub"  # stub | live
