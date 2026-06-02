@@ -10,7 +10,6 @@ data/raw/
 data/cleaned/
 data/tokenized/
 data/manifests/
-data/recruiting/
 model/
 runs/
 reports/
@@ -36,4 +35,6 @@ deploy/compose/.secrets/
 /configs/train/
 /configs/data/
 /configs/model/
+# 内部规划文档（PRD/架构/数据库/迁移计划/前端建议等）：仅本地保留，不进公开仓库。
+# 历史版本仍在 git 里，可用：git restore --source=327ff41^ -- '云原生平台/' 找回。
 云原生平台/
