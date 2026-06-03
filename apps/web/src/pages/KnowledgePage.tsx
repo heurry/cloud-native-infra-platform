@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { FileText, RefreshCw } from "lucide-react";
 
-import { Donut, KpiGrid, PageHeader, PanelHeader, Sparkline, StatusBadge } from "../components/common/PlatformPrimitives";
-import { describeError } from "../components/common/FeedbackStates";
-import { knowledgeSnapshot } from "../data/platformSnapshots";
+import { Donut, KpiGrid, PageHeader, PanelHeader, StatusBadge } from "../components/common/PlatformPrimitives";
+import { describeError, EmptyState } from "../components/common/FeedbackStates";
 import { api } from "../lib/api";
 import { fmt } from "../lib/format";
 import type { KpiItem } from "../types/ui";
@@ -72,14 +71,23 @@ export function KnowledgePage() {
     createMutation.mutate(form);
   }
 
-  // 真实优先；无后端/空库时用 snapshot 兜底展示。
-  const tableDocs: KnowledgeDocument[] = documents.length > 0 ? documents : knowledgeSnapshot.documents;
-  const kpis: KpiItem[] = knowledgeSnapshot.kpis.map((item) =>
-    item.id === "docs" && documents.length > 0
-      ? { ...item, value: String(documents.length), ...deltaOf(item.trend) }
-      : { ...item, ...deltaOf(item.trend) }
-  );
-  const idx = knowledgeSnapshot.index;
+  // 全部派生自真实 /api/knowledge 数据，无 mock 兜底。
+  const totalChunks = documents.reduce((sum, doc) => sum + (doc.chunks ?? 0), 0);
+  const categoryGroups = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const doc of documents) {
+      const key = doc.category || "未分类";
+      map.set(key, (map.get(key) ?? 0) + 1);
+    }
+    return Array.from(map, ([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count);
+  }, [documents]);
+  const lastRebuild = rebuildMutation.data?.document_count ?? null;
+  const kpis: KpiItem[] = [
+    { id: "docs", label: "文档总数", value: String(documents.length), detail: "已入库 pgvector", trend: [], ...deltaOf([]) },
+    { id: "chunks", label: "Chunk 总数", value: String(totalChunks), detail: "向量切块", trend: [], ...deltaOf([]) },
+    { id: "cats", label: "分类数", value: String(categoryGroups.length), detail: "知识域", trend: [], ...deltaOf([]) },
+    { id: "index", label: "索引状态", value: documents.length ? "就绪" : "空", detail: "pgvector RAG", trend: [], ...deltaOf([]), tone: documents.length ? "success" : "warning" },
+  ];
 
   return (
     <section className="infra-page knowledge-replica">
@@ -121,11 +129,16 @@ export function KnowledgePage() {
       )}
 
       <section className="infra-panel">
-        <PanelHeader title="文档列表" action={`${tableDocs.length} 个文档`} />
+        <PanelHeader title="文档列表" action={`${documents.length} 个文档`} />
+        {documentsQuery.isLoading ? (
+          <p className="knowledge-empty">加载中…</p>
+        ) : documents.length === 0 ? (
+          <EmptyState title="知识库为空" description="点击「新建文档」入库；当前语料为基准测试日志" />
+        ) : (
         <table className="infra-table knowledge-table">
           <thead><tr>{["标题", "分类", "版本", "Chunk", "状态", "更新时间", "来源"].map((c) => <th key={c}>{c}</th>)}</tr></thead>
           <tbody>
-            {tableDocs.map((doc) => (
+            {documents.map((doc) => (
               <tr key={String(doc.doc_id)}>
                 <td><strong>{doc.title ?? String(doc.doc_id)}</strong></td>
                 <td>{doc.category ? <span className="kn-cat-tag">{doc.category}</span> : "-"}</td>
@@ -138,6 +151,7 @@ export function KnowledgePage() {
             ))}
           </tbody>
         </table>
+        )}
       </section>
 
       <div className="dashboard-grid">
@@ -164,12 +178,12 @@ export function KnowledgePage() {
         <section className="infra-panel">
           <PanelHeader title="索引健康" action="RAG" />
           <div className="index-health">
-            <Donut value={idx.coverage} max={100} size={88} thickness={9} tone="success" label={`${idx.coverage}%`} />
+            <Donut value={documents.length} max={Math.max(documents.length, 1)} size={88} thickness={9} tone={documents.length ? "success" : "warning"} label={String(documents.length)} />
             <div className="index-health-meta">
-              <div><span>状态</span><StatusBadge status={idx.status} /></div>
-              <div><span>嵌入模型</span><strong>{idx.embedModel}</strong></div>
-              <div><span>向量维度</span><strong>{idx.dimensions}</strong></div>
-              <div><span>最近重建</span><strong>{idx.lastBuilt}</strong></div>
+              <div><span>索引状态</span><StatusBadge status={documents.length ? "就绪" : "空索引"} /></div>
+              <div><span>文档总数</span><strong>{documents.length}</strong></div>
+              <div><span>Chunk 总数</span><strong>{totalChunks}</strong></div>
+              <div><span>最近重建</span><strong>{lastRebuild != null ? `${lastRebuild} 文档` : "—"}</strong></div>
             </div>
           </div>
         </section>
@@ -177,14 +191,18 @@ export function KnowledgePage() {
 
       <section className="infra-panel">
         <PanelHeader title="知识分布" action="按分类" />
-        <div className="kn-category-grid">
-          {knowledgeSnapshot.categories.map((c) => (
-            <div className="kn-category-row" key={c.id}>
-              <div><strong>{c.label}</strong><small>{c.count} 篇</small></div>
-              <Sparkline values={c.trend} tone={c.tone} width={120} height={32} />
-            </div>
-          ))}
-        </div>
+        {categoryGroups.length === 0 ? (
+          <EmptyState title="暂无分类数据" description="文档带 category 字段后这里展示分布" />
+        ) : (
+          <div className="kn-category-grid">
+            {categoryGroups.map((c) => (
+              <div className="kn-category-row" key={c.label}>
+                <div><strong>{c.label}</strong><small>{c.count} 篇</small></div>
+                <div className="kn-category-bar"><i style={{ width: `${(c.count / Math.max(documents.length, 1)) * 100}%` }} /></div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     </section>
   );

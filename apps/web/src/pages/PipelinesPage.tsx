@@ -19,6 +19,7 @@ import { pipelineSnapshot, type PipelineConsoleRow } from "../data/platformSnaps
 import { api } from "../lib/api";
 import { compactMeta, fmt, relativeTime, shortTime } from "../lib/format";
 import { cn } from "../lib/utils";
+import { useGoToPage } from "../lib/useGoToPage";
 import type { Deployment } from "../types/ops";
 import type { KpiItem } from "../types/ui";
 
@@ -28,6 +29,10 @@ export function PipelinesPage() {
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [envFilter, setEnvFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [timeFilter, setTimeFilter] = useState("all");
   const qc = useQueryClient();
 
   const deploymentsQuery = useQuery({
@@ -61,15 +66,24 @@ export function PipelinesPage() {
   const kpis = useMemo(() => buildPipelineKpis(deploymentsQuery.data?.deployments), [deploymentsQuery.data?.deployments]);
   const envDist = useMemo(() => deriveEnvDistribution(deploymentsQuery.data?.deployments), [deploymentsQuery.data?.deployments]);
   const busy = finishMutation.isPending || rollbackMutation.isPending;
+  const envOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.env))).sort(), [rows]);
+  const statusOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.status))).sort(), [rows]);
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((row) =>
-      [row.name, row.service, row.env, row.version, row.commit, row.status, row.stage, row.trigger]
-        .some((value) => String(value).toLowerCase().includes(q))
-    );
-  }, [rows, search]);
-  const pageSize = 7;
+    const now = Date.now();
+    const windowMs = timeFilter === "7d" ? 7 * 86_400_000 : timeFilter === "30d" ? 30 * 86_400_000 : 0;
+    return rows.filter((row) => {
+      if (envFilter !== "all" && row.env !== envFilter) return false;
+      if (statusFilter !== "all" && row.status !== statusFilter) return false;
+      if (windowMs > 0) {
+        const ts = row.source.started_at ? Date.parse(row.source.started_at) : NaN;
+        if (Number.isNaN(ts) || now - ts > windowMs) return false;
+      }
+      if (q && ![row.name, row.service, row.env, row.version, row.commit, row.status, row.stage, row.trigger]
+        .some((value) => String(value).toLowerCase().includes(q))) return false;
+      return true;
+    });
+  }, [rows, search, envFilter, statusFilter, timeFilter]);
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pageRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -103,9 +117,14 @@ export function PipelinesPage() {
           <div className="pipeline-panel-title">
             <PanelHeader title="流水线列表" action={`${filteredRows.length} 条`} />
             <div className="pipeline-toolbar">
-              <button type="button">全部环境</button>
-              <button type="button">全部状态</button>
-              <button type="button">全部类型</button>
+              <select className="pipeline-filter" onChange={(event) => { setEnvFilter(event.target.value); setPage(1); }} value={envFilter}>
+                <option value="all">全部环境</option>
+                {envOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+              </select>
+              <select className="pipeline-filter" onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }} value={statusFilter}>
+                <option value="all">全部状态</option>
+                {statusOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+              </select>
               <label className="pipeline-search"><Search size={14} />
                 <input
                   onChange={(event) => {
@@ -116,7 +135,11 @@ export function PipelinesPage() {
                   value={search}
                 />
               </label>
-              <button type="button">近 7 天</button>
+              <select className="pipeline-filter" onChange={(event) => { setTimeFilter(event.target.value); setPage(1); }} value={timeFilter}>
+                <option value="all">全部时间</option>
+                <option value="7d">近 7 天</option>
+                <option value="30d">近 30 天</option>
+              </select>
               <button onClick={() => deploymentsQuery.refetch()} type="button"><RefreshCw size={13} /> 刷新</button>
               <button className="primary" onClick={() => setCreating(true)} type="button"><Plus size={13} /> 新建流水线</button>
             </div>
@@ -158,7 +181,7 @@ export function PipelinesPage() {
               <button className={item === currentPage ? "active" : undefined} key={item} onClick={() => setPage(item)} type="button">{item}</button>
             ))}
             <button disabled={currentPage === totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))} type="button">›</button>
-            <button type="button">10 条/页</button>
+            <button onClick={() => { setPageSize((value) => (value === 10 ? 20 : value === 20 ? 50 : 10)); setPage(1); }} type="button">{pageSize} 条/页</button>
           </div>
         </section>
 
@@ -202,6 +225,7 @@ function PipelineTableRow({
   busy: boolean;
 }) {
   const isRunning = normalizeStatus(row.source.status) === RUNNING || row.status === "运行中";
+  const goTo = useGoToPage();
   return (
     <div className="pipeline-table-row">
       <span className="pipeline-name-cell">
@@ -226,7 +250,7 @@ function PipelineTableRow({
       </span>
       <span>{row.duration}</span>
       <span className="pipeline-row-actions">
-        <button type="button" title="查看详情"><Eye color="#2563eb" size={14} strokeWidth={2.5} /></button>
+        <button onClick={() => goTo("observability")} type="button" title="查看详情"><Eye color="#2563eb" size={14} strokeWidth={2.5} /></button>
         {isRunning ? (
           <>
             <button disabled={busy} onClick={() => onFinish("success")} type="button" title="标记成功"><CheckCircle color="#2563eb" size={14} strokeWidth={2.5} /></button>
@@ -235,7 +259,7 @@ function PipelineTableRow({
         ) : (
           <>
             <button disabled={busy} onClick={onRollback} type="button" title="回滚"><RotateCcw color="#2563eb" size={14} strokeWidth={2.5} /></button>
-            <button type="button" title="更多"><MoreVertical color="#2563eb" size={14} strokeWidth={2.5} /></button>
+            <button onClick={() => goTo("observability")} type="button" title="更多"><MoreVertical color="#2563eb" size={14} strokeWidth={2.5} /></button>
           </>
         )}
       </span>

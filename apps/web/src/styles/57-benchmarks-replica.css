@@ -86,10 +86,11 @@
   align-items: center;
   display: grid;
   gap: 8px;
-  grid-template-columns: 110px 110px 110px minmax(160px, 1fr) 88px 40px 116px;
+  grid-template-columns: 120px 120px minmax(160px, 1fr) 40px 116px;
   padding: 10px 16px 0;
 }
 .benchmark-toolbar button,
+.benchmark-toolbar select,
 .benchmark-toolbar span,
 .benchmark-toolbar label,
 .benchmark-pagination button {

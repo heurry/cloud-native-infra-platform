@@ -1,0 +1,163 @@
+# 平台升级路线图 / ROADMAP
+
+> 面向云原生微服务场景的分布式基础设施管理平台。
+> 本文档基于 2026-06-03 对当前代码（Go 控制面路由 + 各 handler + ai-service + 前端实际调用）的逐条核对结果，给出后续优化升级计划。
+> 维护约定：完成一项即勾选其验收清单；新增/调整任务保持「目标 → 做法 → 工作量 → 验收 → 风险」五要素。
+
+---
+
+## 0. 现状基线（能力真实性矩阵）
+
+核对方法：以 `server/internal/httpx/router.go` 的端点为锚点，逐个读对应 handler，并比对前端 `apps/web/src` 实际调用的端点。
+
+| 宣称能力 | 真实程度 | 证据 | 诚实边界 |
+|---|---|---|---|
+| 配置中心 | ✅ 完整 | `router.go:69-75` 增查/发布/回滚 + 审计，PG 落库 | 真 CRUD + 版本 + 回滚，前端已接 |
+| 服务治理 | ✅ 完整 | `router.go:63-67` 注册/心跳/注销/健康检查 + TTL reaper | 真服务注册表；拓扑连线是静态架构示意（后端无调用图） |
+| 可观测监控 | ✅ 最强项 | `router.go:43-60` metrics/alerts/k8s 快照（client-go 直读） | 指标来自真实 AIBrix/vLLM serving 栈；告警为规则评估 |
+| AI 运维分析 | ✅ 真实 | `ai_handlers.go` Go 聚证据→Python LLM→落库+审计；`/ai/chat:stream` 流式 Copilot | LLM 不可达落 failed 诊断 + 502，降级诚实 |
+| 分层存储 | 🟡 真实但偏静态 | Redis 热缓存 + PG 关系层 + MinIO 对象层(`benchmark_runner.go:239`) + pgvector | 按数据类型分层 + 大产物 offload；**无**自动冷热生命周期迁移 |
+| 元数据管理 | 🟡 浅 | `models.go` 从 `service_instances` 派生 model_id/kind/status | 非独立模型注册中心（无版本/血缘/产物）；前端甚至绕过该端点直读 service-instances |
+| CI/CD 自动化 | 🟠 建模非执行 | `ops_handlers.go:triggerDeployment` 仅写记录 + 审计，`finishDeployment` 改状态 | **不跑真实流水线**：无 build/test、无 kubectl rollout；是部署生命周期记录/回滚状态机 |
+| 弹性扩缩容 | 🟠 只读观测 | `/kubernetes/hpa` 经 client-go 读 HPA spec/status（`client.go:306`） | 全栈 K8s 调用**只读**，无 Scale/Apply/Patch；扩缩容由 K8s HPA + AIBrix 执行 |
+
+**已做未露（后端就绪、前端无消费）**：
+- `/api/chat/sessions`（客服 RAG 会话，含 `messages:stream`、`/feedback`）—— 无前端页。
+- `/api/evals/customer-support`（检索召回评测）—— 无前端页。
+
+**跨切面（生产级，已落地）**：Redis 令牌桶限流 + 幂等键 + cache-aside、统一错误信封、审计日志、request-id、各依赖不可达透明降级、sqlc→store→dto 分层。
+
+**总体判断**：「管理控制面 + 可观测 + AI 分析」三条线真实闭环；「自动化执行」线（CI/CD 跑流水线、主动扩缩容）是建模/观测而非执行。
+
+---
+
+## 通用原则（贯穿所有阶段）
+
+- 守住既有约定：production-grade 不简化、no-placeholder（有后端才接 UI）、RAG 语料 = 基准日志（不重新引入招聘语料）、Go 单一后端、所有 K8s 写操作走 feature-flag + 可降级。
+- 每个能力升级配三件套：**真实执行 + 落库审计 + 前端可演示**，否则又变成「做了没露出」。
+- 工作量记号：S ≈ 1 天 / M ≈ 2-4 天 / L ≈ 1 周+。
+
+---
+
+## Phase A · 让「自动化执行」名副其实
+
+### A1 — CI/CD 从「记录状态机」升级为「真实 rollout 执行器」 【L】
+- **目标**：触发部署真的改 minikube 中某 Deployment 的镜像并跟踪滚动发布，失败自动回滚。
+- **做法**：
+  - `server/internal/k8s/client.go` 增写能力：`AppsV1().Deployments(ns).Patch`（strategic-merge 设新 image）。
+  - 改造 `ops_handlers.go:triggerDeployment`：写记录后启 goroutine 调 Patch → 轮询 `Deployment.Status`（observedGeneration / updatedReplicas / availableReplicas / conditions[Progressing]）判定 rollout 成败 → 回写 `finishDeployment`。
+  - 失败路径：Patch 回上一个镜像（记录存 `previous_image`）= 自动回滚，对齐已有 `rollbackDeployment`。
+  - 新增 SSE `/deployments/{id}/events`（复用 `benchmark_runner.go` 的 SSE 模式），前端流式显示进度条。
+  - DB 迁移：deployments 表加 `image / previous_image / started_at / finished_at / progress`。
+- **验收**：
+  - [ ] 前端点「触发部署」可见副本逐个 Ready 的实时进度
+  - [ ] 注入坏镜像触发自动回滚 + 两条审计记录
+  - [ ] rollout 状态真实回写到部署记录
+- **风险**：需安全的演示目标 Deployment（勿打 AIBrix 自身），建议部署 `demo-echo` 专供发布演示；写权限需 kubeconfig/RBAC 放开。
+
+### A2 — 弹性扩缩容从「只读 HPA」升级为「配 HPA + 手动扩缩」 【M】
+- **目标**：平台能创建/修改 HPA（min/max/目标利用率），也能对 Deployment 直接 scale。
+- **做法**：
+  - `client.go` 增 `AutoscalingV2().HorizontalPodAutoscalers(ns).Create/Patch` 与 Deployment `scale` 子资源写。
+  - `router.go` 增 `POST/PUT /kubernetes/hpa`、`POST /kubernetes/deployments/{name}/scale`。
+  - 前端 Kubernetes 页：HPA 行加「编辑阈值」、Deployment 行加「扩/缩」（替换之前删掉的死按钮，符合 no-placeholder）。
+  - 实时回显 `desired vs current replicas`（已有读路径）。
+- **验收**：
+  - [ ] 改 HPA target 后压测打流量，副本随真实负载伸缩
+  - [ ] 手动 scale 立即生效并落审计
+- **风险**：勿与 AIBrix 自带扩缩容打架——操作对象选 demo workload，或明确「AIBrix 托管的不允许外部 HPA」。
+
+---
+
+## Phase B · 把「已做未露」的后端变成可演示亮点（纯前端，最高性价比）
+
+### B1 — 客服 RAG 会话前端 【M】
+- **目标**：露出 `/api/chat/sessions` 全套（列表/新建/流式问答/引用来源/反馈）。
+- **做法**：新增「智能客服」页（或并入知识库页）：左会话列表（`GET/POST /chat/sessions`），右流式对话（`messages:stream`，复用 `lib/api.ts` 的 SSE 客户端），展示 RAG 引用（来源 = 基准日志），消息级 👍/👎 调 `/messages/{id}/feedback`；加导航项。
+- **验收**：
+  - [ ] 能开会话、流式回答、看到检索引用、点反馈落库
+  - [ ] 语料严格限基准日志
+- **风险**：低。
+
+### B2 — 检索召回评测前端 【S-M】
+- **目标**：露出 `/api/evals/customer-support`。
+- **做法**：评测页触发评测 → 轮询 `GET /evals/{run_id}` → 展示 recall@k / 命中率 / 逐条用例对错；可并入「压测验证」作第二个 tab。
+- **验收**：
+  - [ ] 跑一次评测看到指标卡 + 用例明细
+- **风险**：低。
+
+---
+
+## Phase C · 把「浅/静态」的能力做深
+
+### C1 — 元数据管理做实（独立模型注册中心） 【L】
+- **目标**：从「`/models` 派生自服务注册表」升级为真正的 model registry。
+- **做法**：新 PG 表 `models`（sqlc 迁移）：model_id / version / base_model / lora_adapter / tags / artifact_uri(MinIO) / lineage(父版本) / created_by；CRUD 端点；与 `service_instances` 按 model_id 关联。前端模型页「元数据管理 / 运行时绑定」两 tab 接真数据。
+- **验收**：
+  - [ ] 注册模型版本（产物存 MinIO）→ 绑定到 vLLM 实例 → 模型页显示版本与血缘
+
+### C2 — 分层存储做出「生命周期」 【M-L】
+- **目标**：从「按类型静态分层」升级为有冷热迁移策略。
+- **做法**：后台 job 把过期的 `metrics_history / audit / benchmark artifacts` 从 PG 归档到 MinIO（JSON/Parquet），保留策略写进**配置中心**（自洽：用自己的配置中心管自己）；读路径透明回退对象层。前端加「存储分层/归档」面板显示各层占用与归档进度。
+- **验收**：
+  - [ ] 调短保留期 → 旧数据迁 MinIO、PG 体积下降、查询仍可回溯
+
+### C3 — 服务拓扑从静态示意 → 真实调用图 【L，依赖数据源】
+- **目标**：连线/流量来自真实数据而非写死。
+- **做法**：(a) 接 AIBrix/envoy 的路由与请求计数指标，按 `endpoint_stats` 生成边权重；或 (b) 上线 OTel 后用 trace 派生 service graph。节点位置可固定，连线粗细 = 真实 QPS。
+- **验收**：
+  - [ ] 拓扑连线粗细随真实流量变化
+- **风险**：取决于 serving 栈是否暴露边级指标；建议先做 D1。
+
+---
+
+## Phase D · 生产化 / 平台工程加固
+
+### D1 — 全链路可观测性（OpenTelemetry + Prometheus + Grafana） 【L】
+- **做法**：Go + ai-service 接 OTel SDK，traces 导出至 OTLP collector（Tempo/Jaeger）；Go 暴露 `/metrics`（Prometheus）；Grafana 看板。一次诊断的 Go→Python→vLLM 全链路 trace 可视化，并为 C3 喂数据。
+- **验收**：
+  - [ ] 一条请求在 Grafana 可见端到端 span 瀑布
+
+### D2 — 认证授权 / 多租户 RBAC 【L】
+- **做法**：现状 operator 写死为 `defaultOperator`；引入 JWT/OIDC，按路由 authz（只读/写/管理员），审计 actor 绑真实身份；配置中心/部署写操作要求相应角色。
+- **验收**：
+  - [ ] 不同角色可见/可做范围不同，审计含真实用户
+
+### D3 — 平台自托管（Helm/Kustomize 上 K8s） 【M-L】
+- **做法**：为 go-server / ai-service / web 写 Helm chart，部署进 minikube，与 serving 栈同集群；配合 A1 平台甚至能发布自己。docker-compose 退为本地开发态。
+- **验收**：
+  - [ ] `helm install` 一键起平台
+
+### D4 — 工程质量：e2e + 负载 + 混沌 【M】
+- **做法**：补 API e2e（起真实依赖的集成测试）、关键路径负载基线、混沌实验（杀 Redis/MinIO/AI 验证降级——代码已支持降级，需测试固化）；CI 跑全套。
+- **验收**：
+  - [ ] CI 绿；混沌实验下平台不崩、降级路径有覆盖
+
+---
+
+## Phase E · AI 能力升级
+
+### E1 — 诊断从单轮 → agentic 工具调用 【L】
+- **做法**：当前 `diagnose` 为「Go 预聚证据 → 单次 LLM」；升级为 agent，让模型按需调用工具（查 K8s、拉指标窗口、读最近部署/告警）多轮取证后下结论，复用现有只读端点当 tools。
+- **验收**：
+  - [ ] 复杂故障下诊断含「模型主动查了哪些证据」的推理轨迹
+
+### E2 — RAG 评测体系 + 在线反馈回流 【M】
+- **做法**：`/messages/{id}/feedback` 已有端点——把反馈回流成评测数据集/重排信号；建立离线评测指标基线（接 B2）。语料仍限基准日志。
+
+### E3 — 模型路由 / A-B / 影子流量 【L】
+- **做法**：借 AIBrix 路由做多模型/多版本灰度、影子流量对比；与 C1（版本）、A1（发布）联动，形成「注册 → 灰度发布 → 评测 → 全量/回滚」闭环。
+
+---
+
+## 推荐执行顺序
+
+1. **B1 + B2**（纯前端、后端已就绪）→ 立刻补上「做了没露出」，演示面最快变厚。
+2. **A1 + A2**（CI/CD 真执行 + 扩缩容真配）→ 把宣称里最虚的两项做实。需先准备 `demo` workload 当操作对象。
+3. **D1（OTel）**→ 为 C3、E1 喂数据，同时是平台工程硬信号。
+4. **C1 / C3 / D2 / D3** 按精力推进。
+5. **E 系列**作为 AI 方向纵深加分。
+
+## 作品集视角取舍
+
+面试展示（非长期产品）建议优先 **B（露出）+ A（执行）+ D1（trace）**，做完即可完整演示「注册 → 发布 → 观测 → AI 诊断 → 回滚」闭环；C/D/E 其余项按目标岗位侧重挑选（投平台/SRE 重 D，投 AI Infra 重 E + C1）。

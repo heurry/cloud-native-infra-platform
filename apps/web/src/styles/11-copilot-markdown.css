@@ -1477,3 +1477,221 @@ button.infra-kpi-card:hover {
 .metric-delta.flat {
   color: #94a3b8;
 }
+
+/* ===== AI Copilot 流式对话面板（复用右侧 infra-copilot 列） ===== */
+.infra-copilot.copilot-chat {
+  align-content: stretch;
+  gap: 12px;
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  overflow: hidden;
+  padding: 16px;
+}
+
+.infra-copilot.copilot-chat .infra-copilot-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.infra-copilot.copilot-chat .infra-copilot-header > strong {
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.copilot-mode-badge {
+  background: #fef3c7;
+  border-radius: 999px;
+  color: #b45309;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  text-transform: uppercase;
+}
+
+.copilot-icon-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: #94a3b8;
+  cursor: pointer;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.copilot-icon-button:hover {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.copilot-chat-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.copilot-chat-intro {
+  align-items: flex-start;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  color: #475569;
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+}
+
+.copilot-chat-intro > svg {
+  color: #2563eb;
+}
+
+.copilot-chat-intro strong {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.copilot-chat-intro p {
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.copilot-suggestions {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+  width: 100%;
+}
+
+.copilot-suggestions button {
+  background: #ffffff;
+  border: 1px solid #d8e0ee;
+  border-radius: 8px;
+  color: #334155;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 8px 10px;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.copilot-suggestions button:hover {
+  background: #f1f6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.copilot-msg {
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.55;
+  max-width: 92%;
+  padding: 10px 12px;
+  word-break: break-word;
+}
+
+.copilot-msg.user {
+  align-self: flex-end;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.copilot-msg.assistant {
+  align-self: flex-start;
+  background: #f3f6fb;
+  border: 1px solid #e6ecf5;
+  color: #1f2937;
+}
+
+.copilot-msg.assistant .md-text {
+  display: grid;
+  gap: 6px;
+}
+
+.copilot-msg.assistant .md-p {
+  margin: 0;
+}
+
+.copilot-chat-notice {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  color: #92400e;
+  font-size: 11px;
+  padding: 7px 10px;
+}
+
+.copilot-quick-actions {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.copilot-quick-actions button {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  color: #475569;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 6px;
+  justify-content: center;
+  min-height: 32px;
+}
+
+.copilot-quick-actions button:hover {
+  background: #eef4ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.infra-copilot.copilot-chat .copilot-input {
+  background: #f8fafc;
+}
+
+.infra-copilot.copilot-chat .copilot-input input {
+  color: #0f172a;
+  flex: 1;
+  min-width: 0;
+  outline: none;
+}
+
+.infra-copilot.copilot-chat .copilot-input button {
+  align-items: center;
+  background: #2563eb;
+  border: 0;
+  border-radius: 6px;
+  color: #ffffff;
+  cursor: pointer;
+  display: inline-flex;
+  height: 28px;
+  justify-content: center;
+  width: 32px;
+}
+
+.infra-copilot.copilot-chat .copilot-input button:disabled {
+  background: #c7d2e3;
+  cursor: not-allowed;
+}
+
+.copilot-spin {
+  animation: copilot-spin 0.9s linear infinite;
+}
+
+@keyframes copilot-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -137,6 +137,7 @@
 }
 
 .config-toolbar button,
+.config-toolbar select,
 .config-search,
 .config-pagination button,
 .config-pagination strong {

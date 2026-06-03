@@ -19,6 +19,7 @@
 #   bash scripts/run_full_stack.sh            # 构建并拉起（默认）
 #   SKIP_BUILD=1 bash scripts/run_full_stack.sh
 #   SKIP_WEB=1   bash scripts/run_full_stack.sh
+#   ALLOW_MINIKUBE_DOWN=1 bash scripts/run_full_stack.sh  # 明知 minikube 未运行仍降级启动
 #   bash scripts/run_full_stack.sh down       # 停掉本栈（保留数据卷）+ 关前端
 set -Eeuo pipefail
 
@@ -54,6 +55,9 @@ SKIP_WEB="${SKIP_WEB:-0}"
 RESTART_WEB="${RESTART_WEB:-1}"
 WEB_MODE="${WEB_MODE:-dev}"
 REGEN_KUBECONFIG="${REGEN_KUBECONFIG:-0}"
+# minikube 容器存在但未运行时默认快速失败（避免 go-server 抢占 192.168.49.2）；
+# 置 1 可在明知降级的前提下强行启动。
+ALLOW_MINIKUBE_DOWN="${ALLOW_MINIKUBE_DOWN:-0}"
 HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-300}"
 KUBECONFIG_SECRET="${KUBECONFIG_SECRET:-deploy/compose/.secrets/kubeconfig}"
 
@@ -152,6 +156,35 @@ preflight() {
     log "  start minikube first (scripts/run_aibrix_4b_stack.sh), or create a placeholder:"
     log "    docker network create minikube"
     exit 1
+  fi
+
+  # 加固：minikube 网络存在、但 minikube 容器未运行 → 快速失败。
+  # 此时 .2（minikube 保留的控制面 IP）无人认领，拉起 Go 栈会让 Docker 把它分给
+  # go-server，之后 `minikube start` 必撞 "Address already in use"（启动顺序坑）。
+  if docker inspect minikube >/dev/null 2>&1; then
+    local mk_status holder
+    mk_status="$(docker inspect -f '{{.State.Status}}' minikube 2>/dev/null || echo unknown)"
+    if [[ "${mk_status}" != "running" ]]; then
+      if [[ "${ALLOW_MINIKUBE_DOWN}" = "1" ]]; then
+        log "[WARN] minikube container is '${mk_status}' (ALLOW_MINIKUBE_DOWN=1): proceeding in degraded mode;"
+        log "        go-server may grab 192.168.49.2 and later block 'minikube start'."
+      else
+        log "[FATAL] minikube container exists but is '${mk_status}', not running."
+        log "        Starting the Go stack now lets Docker assign minikube's reserved IP"
+        log "        192.168.49.2 to go-server; 'minikube start' then fails with 'Address already in use'."
+        holder="$(docker network inspect minikube \
+          -f '{{range .Containers}}{{if eq .IPv4Address "192.168.49.2/24"}}{{.Name}} {{end}}{{end}}' 2>/dev/null || true)"
+        if [[ -n "${holder// /}" && "${holder// /}" != "minikube" ]]; then
+          log "        192.168.49.2 is currently held by: ${holder% }"
+          log "        Release it first:  docker compose -f ${COMPOSE_FILE} down"
+        fi
+        log "        Fix — bring up the inference layer FIRST, then re-run this script:"
+        log "          bash scripts/run_aibrix_4b_stack.sh"
+        log "          bash scripts/run_full_stack.sh"
+        log "        Or run the Go stack standalone on purpose: ALLOW_MINIKUBE_DOWN=1 bash scripts/run_full_stack.sh"
+        exit 1
+      fi
+    fi
   fi
 
   # minikube 停止 → k8s 直读 / vLLM 指标 / cAdvisor 不可达，go-server 降级（不阻塞）。

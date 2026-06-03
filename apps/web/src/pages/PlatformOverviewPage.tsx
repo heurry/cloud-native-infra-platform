@@ -324,8 +324,8 @@ export function PlatformOverviewPage({ setPage }: { setPage: (page: Page) => voi
                   <strong className={cn(row.errorRate > 0.02 && "danger-text", row.errorRate > 0.005 && row.errorRate <= 0.02 && "warning-text")}>{fmt(row.errorRate * 100, 2)}%</strong>
                   <strong className={cn(row.availability < 99 && "danger-text", row.availability >= 99 && row.availability < 99.9 && "warning-text")}>{fmt(row.availability, 2)}%</strong>
                   <div className="dashboard-service-actions">
-                    <button aria-label={`打开 ${row.name}`} title="打开服务" type="button"><Play size={13} /></button>
-                    <button aria-label={`${row.name} 更多操作`} title="更多操作" type="button"><MoreVertical size={13} /></button>
+                    <button aria-label={`打开 ${row.name}`} onClick={() => setPage("services")} title="打开服务" type="button"><Play size={13} /></button>
+                    <button aria-label={`${row.name} 更多操作`} onClick={() => setPage("observability")} title="更多操作" type="button"><MoreVertical size={13} /></button>
                   </div>
                 </div>
               ))
@@ -378,7 +378,7 @@ export function PlatformOverviewPage({ setPage }: { setPage: (page: Page) => voi
                   <span>{row.env}</span>
                   <StatusBadge status={row.status} />
                   <span>{row.time}</span>
-                  <button aria-label={`打开 ${row.pipeline}`} title="打开部署" type="button"><Play size={13} /></button>
+                  <button aria-label={`打开 ${row.pipeline}`} onClick={() => setPage("pipelines")} title="打开部署" type="button"><Play size={13} /></button>
                 </div>
               ))
             )}

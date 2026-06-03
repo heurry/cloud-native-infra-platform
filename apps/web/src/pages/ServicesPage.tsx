@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Activity, Cpu, GitBranch, MoreVertical, RefreshCw, Route, Server, ShieldCheck, Zap } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, Database, GitBranch, Globe, Info, MoreVertical, Network, RefreshCw, Server, Share2, ShieldCheck, Zap } from "lucide-react";
+
+import { useGoToPage } from "../lib/useGoToPage";
 
 import { KpiGrid, PageHeader, PanelHeader, Sparkline, StatusBadge } from "../components/common/PlatformPrimitives";
 import { EmptyState, ErrorState, Skeleton } from "../components/common/FeedbackStates";
@@ -19,6 +21,7 @@ function show(value: number | null | undefined, format: (n: number) => string): 
 }
 
 export function ServicesPage() {
+  const goTo = useGoToPage();
   const queryClient = useQueryClient();
   const [checking, setChecking] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string>("");
@@ -26,7 +29,8 @@ export function ServicesPage() {
   const instancesQuery = useQuery({
     queryKey: ["service-instances"],
     queryFn: () => api<{ instances: ServiceInstance[] }>("/api/service-instances"),
-    select: (payload) => payload.instances.map(normalizeServiceInstance)
+    select: (payload) => payload.instances.map(normalizeServiceInstance),
+    refetchInterval: 10000
   });
 
   const metricsQuery = useQuery({
@@ -61,6 +65,25 @@ export function ServicesPage() {
   const gpuSeries = series((m) => (m.gpu?.length ? Math.max(...m.gpu.map((g) => g.gpu_utilization_percent)) : null));
 
   const runtimeMix = useMemo(() => deriveRuntimeMix(rows), [rows]);
+  // 拓扑节点保留静态架构布局，但状态色由真实 service_instances 健康派生（cache 为基础设施，无探针→info）。
+  const topologyNodes = useMemo(() => {
+    const insts = instancesQuery.data ?? [];
+    const vllms = insts.filter((i) => i.kind === "vllm");
+    const tone = (status: string) => (status === "healthy" ? "success" : "warning");
+    const pick = (id: string) => {
+      if (id === "gateway") return insts.find((i) => i.routing_role === "gateway" || i.kind === "aibrix" || i.name.includes("gateway"));
+      if (id === "router") return insts.find((i) => i.kind === "auto_router" || i.kind === "client_round_robin" || i.name.includes("router"));
+      if (id === "vllm0") return vllms[0];
+      if (id === "vllm1") return vllms[1];
+      return undefined;
+    };
+    return servicesSnapshot.topology.map((node) => {
+      const inst = pick(node.id);
+      return { ...node, tone: inst ? tone(inst.status) : "info" };
+    });
+  }, [instancesQuery.data]);
+  const toneOf = (id: string): string => topologyNodes.find((node) => node.id === id)?.tone ?? "info";
+  const topologyDegraded = topologyNodes.some((node) => node.tone === "warning" || node.tone === "danger");
   // SLO 概览：由实时 metrics 派生（非示例）。无数据时显示 "—"。
   const availability = errorRate == null ? null : Math.max(0, 100 - errorRate * 100);
   const sloCards = [
@@ -188,7 +211,10 @@ export function ServicesPage() {
                     </button>
                     <button
                       aria-label={`${row.name} 更多操作`}
-                      onClick={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        goTo("observability");
+                      }}
                       title="更多操作"
                       type="button"
                     >
@@ -244,49 +270,149 @@ export function ServicesPage() {
 
       <div className="service-bottom-grid">
         <section className="infra-panel service-topology-panel">
-          <PanelHeader title="服务拓扑" action="Gateway → Router → Runtime" />
-          <div className="service-topology-canvas">
-            <svg aria-hidden="true" viewBox="0 0 100 100">
-              <path d="M12 48 C22 48 25 48 36 48" />
-              <path d="M36 48 C48 34 54 30 66 30" />
-              <path d="M36 48 C48 62 54 66 66 66" />
-              <path d="M66 30 C76 38 82 43 90 48" />
-              <path d="M66 66 C76 58 82 53 90 48" />
-            </svg>
-            {servicesSnapshot.topology.map((node) => (
-              <div className={cn("service-topology-node", node.tone)} key={node.id} style={{ left: `${node.x}%`, top: `${node.y}%` }}>
-                <span>{topologyIcon(node.id)}</span>
-                <strong>{node.label}</strong>
+          <div className="topo-head">
+            <div className="topo-head-title">
+              <span className="topo-head-icon"><Network size={18} /></span>
+              <div>
+                <strong>
+                  服务拓扑
+                  <span className={cn("topo-status-chip", topologyDegraded ? "warn" : "ok")}>
+                    {topologyDegraded ? <AlertTriangle size={12} /> : <CheckCircle2 size={12} />}
+                    {topologyDegraded ? "降级" : "健康"}
+                  </span>
+                </strong>
+                <small>请求在 Serving 链路上的流转关系</small>
               </div>
-            ))}
+            </div>
+            <div className="topo-head-legend">
+              <span className="topo-breadcrumb">
+                Gateway <ChevronRight size={12} /> Router <ChevronRight size={12} /> Runtime <ChevronRight size={12} /> Cache
+              </span>
+              <div className="topo-edge-legend">
+                <span className="topo-edge req">请求流</span>
+                <span className="topo-edge lb">负载均衡</span>
+                <span className="topo-edge cache">缓存访问</span>
+              </div>
+            </div>
           </div>
-        </section>
 
-        <section className="infra-panel service-runtime-panel">
-          <PanelHeader title="运行时分布" action="实例占比" />
-          <div className="service-runtime-list">
-            {runtimeMix.length === 0 ? (
-              <EmptyState title="暂无实例" />
-            ) : (
-              runtimeMix.map((item) => (
-                <div className="service-runtime-row" key={item.label}>
-                  <span>{item.label}</span>
-                  <div><i className={item.tone} style={{ width: `${item.value}%` }} /></div>
-                  <strong>{item.value}%</strong>
+          <div className="topo-scroll">
+            <div className="topo-stage">
+              <div className="topo-col topo-col--client">
+                <div className="topo-col-head" />
+                <div className="topo-col-body">
+                  <div className="topo-client">
+                    <span className="topo-client-glyph"><Globe size={18} /></span>
+                    <small>客户端 / 外部流量</small>
+                  </div>
                 </div>
-              ))
-            )}
+              </div>
+
+              <div className="topo-col topo-conn">
+                <div className="topo-col-head" />
+                <div className="topo-col-body">
+                  <span className="topo-line req" />
+                  <span className="topo-line-tip req" />
+                </div>
+              </div>
+
+              <div className="topo-col">
+                <div className="topo-col-head"><span className="topo-lane ingress">入口网关</span></div>
+                <div className="topo-col-body">
+                  <TopoNode glyph={<Globe size={22} />} kind="gateway" name="AI Gateway" tone={toneOf("gateway")} desc="入口流量接入" />
+                </div>
+              </div>
+
+              <div className="topo-col topo-conn topo-conn--divider">
+                <div className="topo-col-head" />
+                <div className="topo-col-body">
+                  <span className="topo-line req" />
+                  <span className="topo-line-tip req" />
+                </div>
+              </div>
+
+              <div className="topo-col">
+                <div className="topo-col-head"><span className="topo-lane router">路由层</span></div>
+                <div className="topo-col-body">
+                  <TopoNode glyph={<Share2 size={22} />} kind="router" name="AIBrix Router" tone={toneOf("router")} desc="路由与负载均衡" tag="least-request" />
+                </div>
+              </div>
+
+              <div className="topo-col topo-conn topo-conn--divider">
+                <div className="topo-col-head" />
+                <div className="topo-col-body topo-conn-body">
+                  <svg className="topo-curve lb" preserveAspectRatio="none" viewBox="0 0 100 100">
+                    <path d="M0 50 C 50 50, 55 25, 100 25" />
+                    <path d="M0 50 C 50 50, 55 75, 100 75" />
+                  </svg>
+                  <span className="topo-curve-tip lb" style={{ top: "25%" }} />
+                  <span className="topo-curve-tip lb" style={{ top: "75%" }} />
+                </div>
+              </div>
+
+              <div className="topo-col topo-col--runtime">
+                <div className="topo-col-head"><span className="topo-lane runtime">运行时层</span></div>
+                <div className="topo-col-body topo-runtime-body">
+                  <TopoNode glyph={<Server size={22} />} kind="runtime" name="vLLM-0" tone={toneOf("vllm0")} desc="Qwen3-4B + LoRA" />
+                  <TopoNode glyph={<Server size={22} />} kind="runtime" name="vLLM-1" tone={toneOf("vllm1")} desc="Qwen3-4B + LoRA" />
+                </div>
+              </div>
+
+              <div className="topo-col topo-conn topo-conn--divider">
+                <div className="topo-col-head" />
+                <div className="topo-col-body topo-conn-body">
+                  <svg className="topo-curve cache" preserveAspectRatio="none" viewBox="0 0 100 100">
+                    <path d="M0 25 C 45 25, 50 50, 100 50" />
+                    <path d="M0 75 C 45 75, 50 50, 100 50" />
+                  </svg>
+                  <span className="topo-curve-tip cache" style={{ top: "50%" }} />
+                </div>
+              </div>
+
+              <div className="topo-col">
+                <div className="topo-col-head"><span className="topo-lane cache">缓存层</span></div>
+                <div className="topo-col-body">
+                  <TopoNode glyph={<Database size={22} />} kind="cache" name="Redis Cache" tone={toneOf("cache")} desc="KV / 会话缓存" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="topo-footnotes">
+            <Footnote icon={ArrowRight} kind="blue" title="流量入口" text="外部请求统一进入 AI Gateway" />
+            <Footnote icon={Share2} kind="purple" title="智能路由" text="按 least-request 策略分发" />
+            <Footnote icon={Server} kind="orange" title="推理运行时" text="多副本并行提供推理服务" />
+            <Footnote icon={Database} kind="green" title="共享缓存" text="统一的 KV / 会话缓存服务" />
           </div>
         </section>
 
-        <section className="infra-panel service-governance-panel">
-          <PanelHeader title="治理建议" action="AI Copilot" />
-          <div className="service-governance-list">
-            <Advice icon={ShieldCheck} title="保持 SLO 门禁" text="生产发布前继续校验 P95、TTFT 与错误率。" tone="success" />
-            <Advice icon={Zap} title="路由再均衡" text="按活跃请求压力（least-request）观察各副本负载分布，必要时再均衡。" tone="info" />
-            <Advice icon={GitBranch} title="回滚预案" text="保留当前模型版本与配置版本的回滚入口。" tone="info" />
-          </div>
-        </section>
+        <div className="service-bottom-side">
+          <section className="infra-panel service-runtime-panel">
+            <PanelHeader title="运行时分布" action="实例占比" />
+            <div className="service-runtime-list">
+              {runtimeMix.length === 0 ? (
+                <EmptyState title="暂无实例" />
+              ) : (
+                runtimeMix.map((item) => (
+                  <div className="service-runtime-row" key={item.label}>
+                    <span>{item.label}</span>
+                    <div><i className={item.tone} style={{ width: `${item.value}%` }} /></div>
+                    <strong>{item.value}%</strong>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+
+          <section className="infra-panel service-governance-panel">
+            <PanelHeader title="治理建议" action="AI Copilot" />
+            <div className="service-governance-list">
+              <Advice icon={ShieldCheck} title="保持 SLO 门禁" text="生产发布前继续校验 P95、TTFT 与错误率。" tone="success" />
+              <Advice icon={Zap} title="路由再均衡" text="按活跃请求压力（least-request）观察各副本负载分布，必要时再均衡。" tone="info" />
+              <Advice icon={GitBranch} title="回滚预案" text="保留当前模型版本与配置版本的回滚入口。" tone="info" />
+            </div>
+          </section>
+        </div>
       </div>
     </section>
   );
@@ -416,11 +542,37 @@ function MetricLine({ label, tone, value }: { label: string; tone: "info" | "suc
   );
 }
 
-function topologyIcon(id: string) {
-  if (id.includes("gateway")) return <Route size={16} />;
-  if (id.includes("router")) return <Activity size={16} />;
-  if (id.includes("cache")) return <Cpu size={16} />;
-  return <Server size={16} />;
+function healthChip(tone: string): { label: string; cls: string; icon: typeof CheckCircle2 } {
+  if (tone === "warning") return { label: "降级", cls: "warn", icon: AlertTriangle };
+  if (tone === "danger") return { label: "异常", cls: "bad", icon: AlertTriangle };
+  if (tone === "info") return { label: "信息", cls: "info", icon: Info };
+  return { label: "健康", cls: "ok", icon: CheckCircle2 };
+}
+
+function TopoNode({ desc, glyph, kind, name, tag, tone }: { desc: string; glyph: JSX.Element; kind: string; name: string; tag?: string; tone: string }) {
+  const chip = healthChip(tone);
+  const ChipIcon = chip.icon;
+  return (
+    <div className={cn("topo-node", `topo-node--${kind}`)}>
+      <span className="topo-node-glyph">{glyph}</span>
+      <strong>{name}</strong>
+      <span className={cn("topo-node-chip", chip.cls)}><ChipIcon size={12} /> {chip.label}</span>
+      <small>{desc}</small>
+      {tag ? <em className="topo-node-tag">{tag}</em> : null}
+    </div>
+  );
+}
+
+function Footnote({ icon: Icon, kind, text, title }: { icon: typeof ArrowRight; kind: string; text: string; title: string }) {
+  return (
+    <div className="topo-foot">
+      <span className={cn("topo-foot-icon", kind)}><Icon size={16} /></span>
+      <div>
+        <strong>{title}</strong>
+        <small>{text}</small>
+      </div>
+    </div>
+  );
 }
 
 function Advice({ icon: Icon, text, title, tone }: { icon: typeof ShieldCheck; text: string; title: string; tone: "info" | "success" | "warning" }) {

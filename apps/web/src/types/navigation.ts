@@ -9,7 +9,6 @@ export type Page =
   | "config"
   | "pipelines"
   | "models"
-  | "demoApps"
   | "settings";
 
 export const pages: Page[] = [
@@ -23,7 +22,6 @@ export const pages: Page[] = [
   "config",
   "pipelines",
   "models",
-  "demoApps",
   "settings"
 ];
 
@@ -38,7 +36,6 @@ export const pageLabels: Record<Page, string> = {
   knowledge: "知识库 / RAG",
   benchmarks: "压测验证",
   models: "模型注册",
-  demoApps: "Demo 应用",
   settings: "平台设置"
 };
 
@@ -55,7 +52,6 @@ export const pagePaths: Record<Page, string> = {
   knowledge: "/knowledge",
   benchmarks: "/benchmarks",
   models: "/models",
-  demoApps: "/demo-apps",
   settings: "/settings"
 };
 

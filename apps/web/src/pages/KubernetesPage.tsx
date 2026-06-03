@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Boxes, MoreVertical, RefreshCw } from "lucide-react";
 
+import { useGoToPage } from "../lib/useGoToPage";
+
 import { Donut, KpiGrid, PageHeader, PanelHeader, StatusBadge } from "../components/common/PlatformPrimitives";
 import { EmptyState, ErrorState, Skeleton } from "../components/common/FeedbackStates";
 import type { KubernetesWorkloadRow } from "../data/platformSnapshots";
@@ -14,6 +16,7 @@ import type { KpiItem } from "../types/ui";
 type ResourceTone = "info" | "success" | "warning" | "danger";
 
 export function KubernetesPage() {
+  const goTo = useGoToPage();
   const [workloadFilter, setWorkloadFilter] = useState<"all" | "abnormal" | "warning" | "normal">("all");
   const [eventFilter, setEventFilter] = useState<"all" | "warning" | "error">("all");
   const [workloadSearch, setWorkloadSearch] = useState("");
@@ -209,7 +212,7 @@ export function KubernetesPage() {
                   <span>{row.desired}</span>
                   <span>{row.availability}%</span>
                   <StatusBadge status={row.status} />
-                  <button aria-label={`${row.name} 操作`} title="更多操作" type="button"><MoreVertical size={14} /></button>
+                  <button aria-label={`${row.name} 操作`} onClick={() => goTo("observability")} title="更多操作" type="button"><MoreVertical size={14} /></button>
                 </div>
               ))
             )}
