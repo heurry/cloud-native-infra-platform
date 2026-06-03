@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+# 让 pytest 把 ai-service 根目录加入 sys.path，使 tests/ 能 `import aiservice`
+# （aiservice 是源码包但未做 pip 安装；CI 仅 `pip install -r requirements.txt`）。
+pythonpath = ["."]
+testpaths = ["tests"]
