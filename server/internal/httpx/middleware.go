@@ -47,6 +47,21 @@ func (s *statusRecorder) WriteHeader(code int) {
 	s.ResponseWriter.WriteHeader(code)
 }
 
+// Flush 透传到底层 ResponseWriter，保证 SSE / 流式响应逐块下发。
+// 不实现 http.Flusher 时，ReverseProxy（FlushInterval=-1）的 w.(http.Flusher)
+// 断言会失败 → 整个流被缓冲，前端只能在结束时一次性收到（如 chat:stream token）。
+func (s *statusRecorder) Flush() {
+	if fl, ok := s.ResponseWriter.(http.Flusher); ok {
+		fl.Flush()
+	}
+}
+
+// Unwrap 让 http.ResponseController（Go 1.20+）能向下找到底层 writer 的
+// Flusher / Hijacker 等能力，避免本包装层吞掉这些接口。
+func (s *statusRecorder) Unwrap() http.ResponseWriter {
+	return s.ResponseWriter
+}
+
 // Logger 结构化访问日志。
 func Logger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
