@@ -82,7 +82,7 @@ Compose 会启动：
 - Python AI Service `:8200`
 - Go Agent `:8090`
 
-> 需要连同 AIBrix/vLLM 服务层一起拉起时，先跑 `bash scripts/run_aibrix_4b_stack.sh`（minikube + AIBrix + vLLM + cAdvisor），再用 `bash scripts/run_full_stack.sh` 一键起 Go 控制面与前端。
+> 这一步即可独立运行：AI 服务回退 stub、k8s / 指标链路降级，不阻塞启动。需要真实模型推理见下方「3. 完整本地栈」——届时改用 `scripts/run_full_stack.sh` 拉起 Go 应用层（内置启动顺序预检）。
 
 ### 2. 启动前端控制台
 
@@ -98,15 +98,26 @@ npm run dev
 - Go API health: `http://127.0.0.1:8081/api/health`
 - Python AI health: `http://127.0.0.1:8200/internal/health`
 
-### 3. 可选本地栈
+### 3. 完整本地栈（含 GPU 推理，可选）
 
-本机已有 minikube、NVIDIA runtime、AIBrix 和 vLLM 环境时，可以使用：
+本机具备 minikube、NVIDIA runtime、AIBrix、vLLM 与模型权重（`model/Qwen3.5-4B/`）时，可拉起真实推理链路。**启动顺序很重要——必须先推理层、后应用层**：
 
 ```bash
+# 1) 先起推理层：minikube + AIBrix + vLLM(Qwen3.5-4B) + cAdvisor；AIBrix 网关 → 127.0.0.1:8010
 bash scripts/run_aibrix_4b_stack.sh
+
+# 2) 再起 Go 应用层 + 前端
+bash scripts/run_full_stack.sh
+
+# 3) 确认网关在服务（应列出 qwen3-4b-customer）
+curl -s http://127.0.0.1:8010/v1/models
 ```
 
-该脚本会启动 AIBrix/vLLM 服务、端口转发、cAdvisor、legacy API、前端和基础冒烟检查。
+网关就绪后，AI Copilot 会从 stub 自动切到真实流式推理（ai-service `AI_STUB_MODE=auto` 每条消息重试 live，无需重启前端）。
+
+> **为什么顺序不能反**：go-server 接入 `minikube` 外部网络以直达集群 API（`192.168.49.2:8443`）。若 minikube 未运行时先起应用层，Docker 会把 minikube 保留的 `192.168.49.2` 分给 go-server，之后 `minikube start` 报 `Address already in use`。两个脚本都内置预检，会**快速失败并给出修复指引**：
+> - `run_full_stack.sh`：minikube 容器存在但未运行时拒绝启动；无 GPU 仅跑应用层降级模式时用 `ALLOW_MINIKUBE_DOWN=1` 覆盖。
+> - `run_aibrix_4b_stack.sh`：`192.168.49.2` 被非 minikube 容器占用时拒绝启动，提示先 `docker compose -f deploy/compose/docker-compose.yml down`。
 
 ## 开发验证
 

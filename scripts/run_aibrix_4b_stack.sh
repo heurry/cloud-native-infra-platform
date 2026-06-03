@@ -26,6 +26,13 @@ MINIKUBE_MODEL_PATH="${MINIKUBE_MODEL_PATH:-${ROOT_DIR}/model/Qwen3.5-4B}"
 AIBRIX_VERSION="${AIBRIX_VERSION:-v0.6.0}"
 SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-qwen3-4b-customer}"
 AIBRIX_PORT="${AIBRIX_PORT:-8010}"
+# port-forward 监听地址（逗号分隔列表）：默认同时绑回环 + docker 网桥网关，不暴露到局域网。
+# - 127.0.0.1：脚本自身的健康探针（wait_http / curl）与宿主访问走回环，必须保留；
+# - 172.17.0.1：compose 容器经 host.docker.internal（= 网桥网关）访问网关 / cAdvisor / vLLM。
+# kubectl port-forward 默认只绑 127.0.0.1，容器侧会 Connection refused，故显式补网桥地址。
+# 网桥网关非 172.17.0.1 时按 `docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}'`
+# 调整；想暴露所有网卡可设 PF_BIND_ADDRESS=0.0.0.0。
+PF_BIND_ADDRESS="${PF_BIND_ADDRESS:-127.0.0.1,172.17.0.1}"
 CADVISOR_PORT="${CADVISOR_PORT:-18080}"
 CADVISOR_TIMEOUT="${CADVISOR_TIMEOUT:-120s}"
 START_MINIKUBE_IF_STOPPED="${START_MINIKUBE_IF_STOPPED:-1}"
@@ -227,6 +234,26 @@ ensure_minikube_running() {
     fi
   done
 
+  # 反向检查：minikube 未运行，但其保留的控制面 IP 192.168.49.2 已被非 minikube 容器占用
+  # （通常是先跑了 run_full_stack.sh，go-server 抢到了它）→ `minikube start` 必撞
+  # "Address already in use"。先于 start 快速失败，给出释放指引。
+  if docker network inspect minikube >/dev/null 2>&1; then
+    local ip_holder
+    ip_holder="$(docker network inspect minikube \
+      -f '{{range .Containers}}{{if eq .IPv4Address "192.168.49.2/24"}}{{.Name}} {{end}}{{end}}' 2>/dev/null || true)"
+    ip_holder="${ip_holder% }"
+    if [[ -n "${ip_holder}" && "${ip_holder}" != "minikube" ]]; then
+      log "[FATAL] 192.168.49.2 (minikube's reserved control-plane IP) is held by: ${ip_holder}"
+      log "        'minikube start' would fail with 'Address already in use'."
+      log "        This usually means the Go stack came up before minikube and grabbed it."
+      log "        Release it first, then re-run in the correct order:"
+      log "          docker compose -f deploy/compose/docker-compose.yml down"
+      log "          bash scripts/run_aibrix_4b_stack.sh"
+      log "          bash scripts/run_full_stack.sh"
+      return 1
+    fi
+  fi
+
   log "starting GPU minikube"
   run minikube start "${args[@]}"
   ensure_gpu_device_plugin
@@ -345,12 +372,12 @@ start_aibrix_port_forward() {
     log "AIBrix Envoy service not found"
     return 1
   fi
-  log "starting AIBrix port-forward ${service} ${AIBRIX_PORT}:80"
-  nohup kubectl port-forward -n envoy-gateway-system "${service}" "${AIBRIX_PORT}:80" \
+  log "starting AIBrix port-forward ${service} ${AIBRIX_PORT}:80 (--address ${PF_BIND_ADDRESS})"
+  nohup kubectl port-forward --address "${PF_BIND_ADDRESS}" -n envoy-gateway-system "${service}" "${AIBRIX_PORT}:80" \
     > "${LOG_DIR}/aibrix_port_forward.log" 2>&1 &
   echo "$!" > "${LOG_DIR}/aibrix_port_forward.pid"
   sleep 3
-  ss -ltnp | grep "127.0.0.1:${AIBRIX_PORT}"
+  ss -ltnp | grep ":${AIBRIX_PORT} "
 }
 
 start_cadvisor_observability() {
@@ -376,8 +403,8 @@ start_cadvisor_observability() {
   kill_port "${CADVISOR_PORT}"
   local attempt
   for attempt in $(seq 1 6); do
-    log "starting cAdvisor port-forward service/cadvisor ${CADVISOR_PORT}:8080, attempt=${attempt}"
-    nohup kubectl port-forward -n observability service/cadvisor "${CADVISOR_PORT}:8080" \
+    log "starting cAdvisor port-forward service/cadvisor ${CADVISOR_PORT}:8080, attempt=${attempt} (--address ${PF_BIND_ADDRESS})"
+    nohup kubectl port-forward --address "${PF_BIND_ADDRESS}" -n observability service/cadvisor "${CADVISOR_PORT}:8080" \
       > "${LOG_DIR}/cadvisor_port_forward.log" 2>&1 &
     local pf_pid="$!"
     echo "${pf_pid}" > "${LOG_DIR}/cadvisor_port_forward.pid"
@@ -421,8 +448,8 @@ start_direct_round_robin_port_forwards() {
   for idx in 0 1; do
     local pod="${pods[$idx]}"
     local port="${ports[$idx]}"
-    log "starting round-robin port-forward pod/${pod} ${port}:8000"
-    nohup kubectl port-forward -n default "pod/${pod}" "${port}:8000" \
+    log "starting round-robin port-forward pod/${pod} ${port}:8000 (--address ${PF_BIND_ADDRESS})"
+    nohup kubectl port-forward --address "${PF_BIND_ADDRESS}" -n default "pod/${pod}" "${port}:8000" \
       > "${LOG_DIR}/vllm_replica_${idx}.log" 2>&1 &
     echo "$!" > "${LOG_DIR}/vllm_replica_${idx}.pid"
   done
@@ -430,7 +457,7 @@ start_direct_round_robin_port_forwards() {
   sleep 3
   wait_http "http://127.0.0.1:8000/health" 120
   wait_http "http://127.0.0.1:8001/health" 120
-  ss -ltnp | rg '127.0.0.1:8000|127.0.0.1:8001'
+  ss -ltnp | rg ':8000 |:8001 '
 }
 
 main() {
