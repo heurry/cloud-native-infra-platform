@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { ShieldCheck } from "lucide-react";
 
 import { StatusBadge } from "../common/PlatformPrimitives";
-import { settingsSnapshot } from "../../data/platformSnapshots";
 import { api } from "../../lib/api";
 import type { Metrics } from "../../types/platform";
 
@@ -34,17 +33,13 @@ export function SettingsStatusPanel() {
     retry: false,
   });
 
-  const goStatus = statusOf(healthQuery);
-  const agentStatus = metricsQuery.isSuccess && metricsQuery.data?.host ? "healthy" : statusOf(metricsQuery);
-  const aiStatus = statusOf(aiQuery);
-  const legacyStatus = statusOf(legacyQuery);
-  const statusMap: Record<string, string> = {
-    go: goStatus,
-    agent: agentStatus,
-    ai: aiStatus,
-    legacy: legacyStatus,
-  };
-  const services = settingsSnapshot.services.map((s) => ({ ...s, status: statusMap[s.id] ?? s.status }));
+  // 标签/端点是真实架构元数据，状态全部来自实时探测（legacy 单体已退役，对应探针改为知识库）。
+  const services = [
+    { id: "go", label: "Go 控制面 API", endpoint: ":8081 · /api/health", status: statusOf(healthQuery) },
+    { id: "agent", label: "Node Agent / 主机指标", endpoint: ":8090 · /api/metrics", status: metricsQuery.isSuccess && metricsQuery.data?.host ? "healthy" : statusOf(metricsQuery) },
+    { id: "ai", label: "AI 服务", endpoint: ":8200 · /api/ai", status: statusOf(aiQuery) },
+    { id: "knowledge", label: "知识库 / RAG", endpoint: "/api/knowledge", status: statusOf(legacyQuery) },
+  ];
 
   return (
     <aside className="infra-copilot settings-status-panel">

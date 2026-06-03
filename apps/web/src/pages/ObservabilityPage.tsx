@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { MoreVertical, Pause, RefreshCw, Search } from "lucide-react";
+import { MoreVertical, Pause, Play, RefreshCw, Search } from "lucide-react";
+
+import { useGoToPage } from "../lib/useGoToPage";
 
 import { Donut, KpiGrid, PageHeader, PanelHeader, Sparkline, StatusBadge } from "../components/common/PlatformPrimitives";
 import { EmptyState, ErrorState, Skeleton } from "../components/common/FeedbackStates";
@@ -65,31 +67,35 @@ function show(value: number | null | undefined, format: (n: number) => string): 
 }
 
 export function ObservabilityPage() {
+  const goTo = useGoToPage();
   const [activeTab, setActiveTab] = useState<ObsTab>("指标总览");
   const [query, setQuery] = useState("");
   const [serviceFilter, setServiceFilter] = useState<string>(ALL_SERVICES);
   const [instanceFilter, setInstanceFilter] = useState<string>(ALL_INSTANCES);
   const [metricFilter, setMetricFilter] = useState<ObsMetricFilter>("延迟 (P95)");
   const [groupBy, setGroupBy] = useState<ObsGroupBy>("服务");
+  const [refreshMs, setRefreshMs] = useState(5000);
+  const [paused, setPaused] = useState(false);
+  const [historyLimit, setHistoryLimit] = useState(30);
   const metricsQuery = useQuery({
     queryKey: ["metrics", "current"],
     queryFn: () => api<Metrics>("/api/metrics/current"),
-    refetchInterval: 5000
+    refetchInterval: paused ? false : refreshMs
   });
   const historyQuery = useQuery({
-    queryKey: ["metrics", "history", 30],
-    queryFn: () => api<{ samples: MetricsHistorySample[] }>("/api/metrics/history?limit=30"),
-    refetchInterval: 5000
+    queryKey: ["metrics", "history", historyLimit],
+    queryFn: () => api<{ samples: MetricsHistorySample[] }>(`/api/metrics/history?limit=${historyLimit}`),
+    refetchInterval: paused ? false : refreshMs
   });
   const tracesQuery = useQuery({
     queryKey: ["metrics", "requests", 200],
     queryFn: () => api<{ requests: RequestTrace[] }>("/api/metrics/requests?limit=200"),
-    refetchInterval: 5000
+    refetchInterval: paused ? false : refreshMs
   });
   const alertsQuery = useQuery({
     queryKey: ["alerts"],
     queryFn: () => api<{ alerts: AlertRow[]; summary: Record<string, number> }>("/api/alerts"),
-    refetchInterval: 5000
+    refetchInterval: paused ? false : refreshMs
   });
 
   const metrics = metricsQuery.data ?? null;
@@ -249,10 +255,20 @@ export function ObservabilityPage() {
           ))}
           <div className="obs-refresh-meta">
             <span>时间范围</span>
-            <button type="button">近 30 分钟</button>
+            <select onChange={(event) => setHistoryLimit(Number(event.target.value))} value={historyLimit}>
+              <option value={30}>近 30 分钟</option>
+              <option value={60}>近 1 小时</option>
+              <option value={180}>近 3 小时</option>
+            </select>
             <span>刷新</span>
-            <button type="button">10s</button>
-            <Pause size={14} />
+            <select disabled={paused} onChange={(event) => setRefreshMs(Number(event.target.value))} value={refreshMs}>
+              <option value={5000}>5s</option>
+              <option value={10000}>10s</option>
+              <option value={30000}>30s</option>
+            </select>
+            <button onClick={() => setPaused((value) => !value)} title={paused ? "恢复刷新" : "暂停刷新"} type="button">
+              {paused ? <Play size={14} /> : <Pause size={14} />}
+            </button>
           </div>
         </div>
         <div className="obs-query-row">
@@ -437,7 +453,7 @@ export function ObservabilityPage() {
                         <strong className={row.p95 > 200 ? "warning-text" : "success-text"}>{fmt(row.p95, 0)}ms</strong>
                         <strong className={row.error > 0.01 ? "danger-text" : undefined}>{fmt(row.error * 100, 2)}%</strong>
                         <span>{fmt(row.availability, 2)}%</span>
-                        <button type="button"><MoreVertical size={13} /></button>
+                        <button onClick={() => goTo("aiOps")} type="button"><MoreVertical size={13} /></button>
                       </div>
                     ))
                   )}
@@ -628,7 +644,7 @@ export function ObservabilityPage() {
                     <span>{alert.threshold}</span>
                     <span>—</span>
                     <span>{relativeTime(alert.triggered_at)}</span>
-                    <button type="button">处理</button>
+                    <button onClick={() => goTo("aiOps")} type="button">处理</button>
                   </div>
                 ))
               )}

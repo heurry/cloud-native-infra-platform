@@ -655,3 +655,35 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* AI Ops 工具栏：严重性/状态筛选下拉 + 真实搜索框 */
+.aiops-toolbar select {
+  background: #ffffff;
+  border: 1px solid #d8e0eb;
+  border-radius: 6px;
+  color: #334155;
+  cursor: pointer;
+  font-size: 12px;
+  height: 30px;
+  padding: 0 8px;
+}
+.aiops-toolbar .aiops-search {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #d8e0eb;
+  border-radius: 6px;
+  color: #94a3b8;
+  display: inline-flex;
+  gap: 6px;
+  height: 30px;
+  min-width: 260px;
+  padding: 0 10px;
+}
+.aiops-toolbar .aiops-search input {
+  background: transparent;
+  border: 0;
+  color: #334155;
+  font: inherit;
+  outline: none;
+  width: 100%;
+}

@@ -3,11 +3,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Activity, BarChart3, Box, Eye, MoreVertical, Plus, RefreshCw, Route, Search } from "lucide-react";
 
+import { useGoToPage } from "../lib/useGoToPage";
+
 import { KpiGrid, PageHeader, PanelHeader, StatusBadge } from "../components/common/PlatformPrimitives";
 import { describeError, EmptyState, ErrorState, Skeleton } from "../components/common/FeedbackStates";
 import { Drawer, DrawerField } from "../components/common/Drawer";
 import { modelsSnapshot, type ModelRegistryRow } from "../data/platformSnapshots";
-import { normalizeServiceInstance, PLATFORM_MODEL_ID } from "../data/mockPlatformData";
+import { normalizeServiceInstance } from "../data/mockPlatformData";
 import { api } from "../lib/api";
 import { cn } from "../lib/utils";
 import type { Metrics, ServiceInstance } from "../types/platform";
@@ -18,12 +20,17 @@ function isRouter(item: ServiceInstance): boolean {
 }
 
 export function ModelsPage() {
+  const goTo = useGoToPage();
   const queryClient = useQueryClient();
   const [checking, setChecking] = useState<string | null>(null);
   const [routeTarget, setRouteTarget] = useState<ServiceInstance | null>(null);
   const [creating, setCreating] = useState(false);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [modelTab, setModelTab] = useState("模型列表");
   const [localModels, setLocalModels] = useState<ModelRegistryRow[]>([]);
 
   const instancesQuery = useQuery({
@@ -54,11 +61,16 @@ export function ModelsPage() {
   }
 
   const rows = useMemo(() => [...localModels, ...deriveModelRows(instancesQuery.data)], [instancesQuery.data, localModels]);
+  const typeOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.type))).sort(), [rows]);
+  const statusOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.status))).sort(), [rows]);
   const filteredRows = useMemo(() => {
     const keyword = search.trim().toLowerCase();
-    return keyword ? rows.filter((row) => `${row.name} ${row.description} ${row.type} ${row.version}`.toLowerCase().includes(keyword)) : rows;
-  }, [rows, search]);
-  const pageSize = 6;
+    return rows.filter((row) =>
+      (typeFilter === "all" || row.type === typeFilter) &&
+      (statusFilter === "all" || row.status === statusFilter) &&
+      (!keyword || `${row.name} ${row.description} ${row.type} ${row.version}`.toLowerCase().includes(keyword))
+    );
+  }, [rows, search, typeFilter, statusFilter]);
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pageRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -97,19 +109,25 @@ export function ModelsPage() {
 
       <section className="infra-panel models-main-panel">
         <div className="models-tabs">
-          {["模型列表", "版本管理", "运行时绑定", "元数据管理", "合规检查"].map((tab, index) => (
-            <button className={index === 0 ? "active" : undefined} key={tab} type="button">{tab}</button>
+          {["模型列表", "运行时绑定", "元数据管理"].map((t) => (
+            <button className={modelTab === t ? "active" : undefined} key={t} onClick={() => setModelTab(t)} type="button">{t}</button>
           ))}
         </div>
+        {modelTab === "模型列表" && (
+        <>
         <div className="models-toolbar">
-          <button type="button">全部类型</button>
-          <button type="button">全部状态</button>
-          <button type="button">全部环境</button>
+          <select className="models-filter" onChange={(event) => { setTypeFilter(event.target.value); setPage(1); }} value={typeFilter}>
+            <option value="all">全部类型</option>
+            {typeOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+          </select>
+          <select className="models-filter" onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }} value={statusFilter}>
+            <option value="all">全部状态</option>
+            {statusOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+          </select>
           <label className="models-search-box"><Search size={14} /> <input onChange={(event) => {
             setSearch(event.target.value);
             setPage(1);
-          }} placeholder="搜索模型名称、描述、标签..." value={search} /></label>
-          <button type="button">标签筛选</button>
+          }} placeholder="搜索模型名称、描述..." value={search} /></label>
           <button type="button" onClick={() => instancesQuery.refetch()}><RefreshCw size={13} /></button>
           <button className="primary" onClick={() => setCreating(true)} type="button"><Plus size={13} /> 注册模型</button>
         </div>
@@ -155,15 +173,15 @@ export function ModelsPage() {
               <span>{row.instances}</span>
               <span>{row.updatedAt}</span>
               <span className="models-row-actions">
-                <button type="button" title="查看"><Eye color="#2563eb" size={13} strokeWidth={2.5} /></button>
+                <button onClick={() => goTo("observability")} type="button" title="查看"><Eye color="#2563eb" size={13} strokeWidth={2.5} /></button>
                 <button disabled={!row.source || checking === row.source.name} onClick={() => row.source && void healthcheck(row.source)} type="button" title="健康检查">
                   <Activity color="#2563eb" size={13} strokeWidth={2.5} />
                 </button>
                 <button disabled={!row.source || !isRouter(row.source)} onClick={() => row.source && setRouteTarget(row.source)} type="button" title="路由策略">
                   <Route color="#2563eb" size={13} strokeWidth={2.5} />
                 </button>
-                <button type="button" title="趋势"><BarChart3 color="#2563eb" size={13} strokeWidth={2.5} /></button>
-                <button type="button" title="更多"><MoreVertical color="#2563eb" size={13} strokeWidth={2.5} /></button>
+                <button onClick={() => goTo("observability")} type="button" title="趋势"><BarChart3 color="#2563eb" size={13} strokeWidth={2.5} /></button>
+                <button onClick={() => goTo("observability")} type="button" title="更多"><MoreVertical color="#2563eb" size={13} strokeWidth={2.5} /></button>
               </span>
             </div>
           )))}
@@ -176,8 +194,48 @@ export function ModelsPage() {
             <button className={item === currentPage ? "active" : undefined} key={item} onClick={() => setPage(item)} type="button">{item}</button>
           ))}
           <button disabled={currentPage === totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))} type="button">›</button>
-          <button type="button">10 条/页</button>
+          <button onClick={() => { setPageSize((value) => (value === 10 ? 20 : value === 20 ? 50 : 10)); setPage(1); }} type="button">{pageSize} 条/页</button>
         </div>
+        </>
+        )}
+
+        {modelTab === "运行时绑定" && (
+          <table className="infra-table models-tab-table">
+            <thead><tr>{["模型 / 实例", "类型", "路由角色", "Endpoint", "状态"].map((c) => <th key={c}>{c}</th>)}</tr></thead>
+            <tbody>
+              {(instancesQuery.data ?? []).length === 0 ? (
+                <tr><td colSpan={5}><EmptyState title="暂无运行时实例" description="service_instances 目录为空" /></td></tr>
+              ) : (instancesQuery.data ?? []).map((inst) => (
+                <tr key={inst.name}>
+                  <td><strong>{inst.name}</strong></td>
+                  <td>{inst.kind}</td>
+                  <td>{inst.routing_role || "-"}</td>
+                  <td><span className="cell-subtle" style={{ marginTop: 0 }}>{inst.base_url}</span></td>
+                  <td><StatusBadge status={inst.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        {modelTab === "元数据管理" && (
+          <table className="infra-table models-tab-table">
+            <thead><tr>{["模型 / 实例", "model_id", "类型", "GPU", "状态"].map((c) => <th key={c}>{c}</th>)}</tr></thead>
+            <tbody>
+              {(instancesQuery.data ?? []).length === 0 ? (
+                <tr><td colSpan={5}><EmptyState title="暂无模型元数据" description="service_instances 目录为空" /></td></tr>
+              ) : (instancesQuery.data ?? []).map((inst) => (
+                <tr key={inst.name}>
+                  <td><strong>{inst.name}</strong></td>
+                  <td>{inst.model_id || "-"}</td>
+                  <td>{inst.kind}</td>
+                  <td>{inst.gpu_id || "-"}</td>
+                  <td><StatusBadge status={inst.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </section>
 
       <RoutingPolicyDrawer instance={routeTarget} onClose={() => setRouteTarget(null)} />
@@ -193,7 +251,7 @@ function deriveModelRows(instances: ServiceInstance[] | undefined): ModelRegistr
     name: item.name,
     description: item.kind === "vllm" ? "vLLM 推理服务模型" : item.kind === "aibrix" ? "AIBrix 网关模型绑定" : "运行时模型实例",
     type: item.model_id?.includes("embed") ? "Embedding" : "LLM",
-    version: item.model_id || PLATFORM_MODEL_ID,
+    version: item.model_id || "—",
     status: item.status === "healthy" ? "运行中" : "告警",
     env: "prod",
     quality: null, // 质量评分暂无后端来源（待评测端点）
@@ -205,7 +263,7 @@ function deriveModelRows(instances: ServiceInstance[] | undefined): ModelRegistr
 
 function buildModelKpis(instances: ServiceInstance[] | undefined, metrics: Metrics | undefined): KpiItem[] {
   const list = instances ?? [];
-  const modelCount = new Set(list.map((item) => item.model_id || PLATFORM_MODEL_ID)).size;
+  const modelCount = new Set(list.map((item) => item.model_id).filter(Boolean)).size;
   const healthy = list.filter((item) => item.status === "healthy").length;
   const totalInstances = metrics?.service_instances?.length ?? list.length;
   const types = new Set(list.map((item) => item.kind)).size;

@@ -3,6 +3,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { BarChart3, Eye, MoreVertical, Play, Plus, RefreshCw, Search } from "lucide-react";
 
+import { useGoToPage } from "../lib/useGoToPage";
+
 import { KpiGrid, PageHeader, PanelHeader, StatusBadge } from "../components/common/PlatformPrimitives";
 import { describeError, EmptyState, ErrorState } from "../components/common/FeedbackStates";
 import { Drawer } from "../components/common/Drawer";
@@ -38,6 +40,9 @@ export function BenchmarksPage() {
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [scenarioFilter, setScenarioFilter] = useState("all");
   const [localRows, setLocalRows] = useState<BenchmarkTaskRow[]>([]);
 
   const startMutation = useMutation({
@@ -97,11 +102,16 @@ export function BenchmarksPage() {
     const liveRows = deriveBenchmarkRows(eventsQuery.data);
     return [...localRows, ...liveRows];
   }, [eventsQuery.data, localRows]);
+  const statusOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.status))).sort(), [rows]);
+  const scenarioOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.scenario))).sort(), [rows]);
   const filteredRows = useMemo(() => {
     const keyword = search.trim().toLowerCase();
-    return keyword ? rows.filter((row) => `${row.name} ${row.service} ${row.version} ${row.scenario} ${row.status}`.toLowerCase().includes(keyword)) : rows;
-  }, [rows, search]);
-  const pageSize = 6;
+    return rows.filter((row) =>
+      (statusFilter === "all" || row.status === statusFilter) &&
+      (scenarioFilter === "all" || row.scenario === scenarioFilter) &&
+      (!keyword || `${row.name} ${row.service} ${row.version} ${row.scenario} ${row.status}`.toLowerCase().includes(keyword))
+    );
+  }, [rows, search, statusFilter, scenarioFilter]);
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pageRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -133,19 +143,23 @@ export function BenchmarksPage() {
 
       <section className="infra-panel benchmark-main-panel">
         <div className="benchmark-tabs">
-          {["压测任务", "基准管理", "回归报告", "SLO 门禁", "压测配置"].map((tab, index) => (
-            <button className={index === 0 ? "active" : undefined} key={tab} type="button">{tab}</button>
+          {["压测任务"].map((t) => (
+            <button className="active" key={t} type="button">{t}</button>
           ))}
         </div>
         <div className="benchmark-toolbar">
-          <button type="button">全部环境</button>
-          <button type="button">全部状态</button>
-          <button type="button">全部类型</button>
+          <select className="benchmark-filter" onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }} value={statusFilter}>
+            <option value="all">全部状态</option>
+            {statusOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+          </select>
+          <select className="benchmark-filter" onChange={(event) => { setScenarioFilter(event.target.value); setPage(1); }} value={scenarioFilter}>
+            <option value="all">全部场景</option>
+            {scenarioOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+          </select>
           <label className="benchmark-search-box"><Search size={14} /> <input onChange={(event) => {
             setSearch(event.target.value);
             setPage(1);
           }} placeholder="搜索任务名称、服务、版本..." value={search} /></label>
-          <button type="button">近 7 天</button>
           <button type="button" onClick={() => runQuery.refetch()}><RefreshCw size={13} /></button>
           <button className="primary" disabled={startMutation.isPending} onClick={() => setCreating(true)} type="button">
             <Plus size={13} /> 新建压测
@@ -166,7 +180,7 @@ export function BenchmarksPage() {
             <button className={item === currentPage ? "active" : undefined} key={item} onClick={() => setPage(item)} type="button">{item}</button>
           ))}
           <button disabled={currentPage === totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))} type="button">›</button>
-          <button type="button">10 条/页</button>
+          <button onClick={() => { setPageSize((value) => (value === 10 ? 20 : value === 20 ? 50 : 10)); setPage(1); }} type="button">{pageSize} 条/页</button>
         </div>
       </section>
 
@@ -181,6 +195,7 @@ export function BenchmarksPage() {
 }
 
 function BenchmarkTable({ rows }: { rows: BenchmarkTaskRow[] }) {
+  const goTo = useGoToPage();
   return (
     <div className="benchmark-table">
       <div className="benchmark-table-row header">
@@ -214,9 +229,9 @@ function BenchmarkTable({ rows }: { rows: BenchmarkTaskRow[] }) {
           <StatusBadge status={row.status} />
           <span>{row.startedAt}</span>
           <span className="benchmark-row-actions">
-            <button aria-label={`${row.name} 指标`} title="指标" type="button"><BarChart3 color="#2563eb" size={13} strokeWidth={2.5} /></button>
-            <button aria-label={`${row.name} 详情`} title="查看详情" type="button"><Eye color="#2563eb" size={13} strokeWidth={2.5} /></button>
-            <button aria-label={`${row.name} 更多操作`} title="更多操作" type="button"><MoreVertical color="#2563eb" size={13} strokeWidth={2.5} /></button>
+            <button aria-label={`${row.name} 指标`} onClick={() => goTo("observability")} title="指标" type="button"><BarChart3 color="#2563eb" size={13} strokeWidth={2.5} /></button>
+            <button aria-label={`${row.name} 详情`} onClick={() => goTo("observability")} title="查看详情" type="button"><Eye color="#2563eb" size={13} strokeWidth={2.5} /></button>
+            <button aria-label={`${row.name} 更多操作`} onClick={() => goTo("observability")} title="更多操作" type="button"><MoreVertical color="#2563eb" size={13} strokeWidth={2.5} /></button>
           </span>
         </div>
       ))}

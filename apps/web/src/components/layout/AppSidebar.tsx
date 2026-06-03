@@ -1,8 +1,6 @@
 import {
   Activity,
   Bot,
-  Briefcase,
-  ChevronDown,
   Cpu,
   Database,
   Gauge,
@@ -30,7 +28,6 @@ const navItems: Array<{ id: Page; label: string; icon: LucideIcon }> = [
   { id: "benchmarks", label: "压测验证", icon: Gauge },
   { id: "models", label: "模型注册", icon: Cpu },
   { id: "knowledge", label: "知识库 / RAG", icon: Library },
-  { id: "demoApps", label: "Demo 应用", icon: Briefcase },
   { id: "settings", label: "设置", icon: Settings }
 ];
 
@@ -53,10 +50,6 @@ export function AppSidebar({ page, setPage }: { page: Page; setPage: (page: Page
           );
         })}
       </nav>
-      <button className="infra-collapse-button" type="button">
-        <ChevronDown size={15} />
-        收起导航
-      </button>
     </aside>
   );
 }

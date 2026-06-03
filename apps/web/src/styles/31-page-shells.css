@@ -2554,3 +2554,125 @@ pre {
   min-height: 28px;
   padding: 4px 10px;
 }
+
+/* ===== 顶栏通知 / 活动下拉 ===== */
+.topbar-menu-anchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.infra-icon-action.active {
+  background: var(--tw-info-100, #dbeafe);
+  color: var(--tw-info-700, #1d4ed8);
+}
+
+.topbar-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 320px;
+  max-width: 84vw;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+  z-index: 60;
+  overflow: hidden;
+}
+
+.topbar-menu > header {
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  border-bottom: 1px solid #eef2f7;
+  background: #f8fafc;
+}
+
+.topbar-menu-list {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.topbar-menu-empty {
+  margin: 0;
+  padding: 22px 14px;
+  text-align: center;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.topbar-menu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #f1f5f9;
+  cursor: pointer;
+  text-align: left;
+}
+
+.topbar-menu-item:last-child {
+  border-bottom: 0;
+}
+
+.topbar-menu-item:hover {
+  background: #f5f8ff;
+}
+
+.topbar-menu-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 999px;
+}
+
+.topbar-menu-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.topbar-menu-text strong {
+  font-size: 13px;
+  color: #1f2937;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-menu-text small {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+/* ===== Tab 子页（变更记录 / 版本历史 / 运行时绑定 / 元数据管理）容器留白 ===== */
+.config-tab-feed {
+  padding: 8px 16px 16px;
+}
+
+.models-tab-table {
+  margin: 12px 16px 16px;
+  width: calc(100% - 32px);
+}
+
+/* 知识分布：真实分类计数条（取代 mock sparkline 趋势） */
+.kn-category-bar {
+  background: #eef2f7;
+  border-radius: 999px;
+  height: 8px;
+  min-width: 120px;
+  overflow: hidden;
+}
+.kn-category-bar i {
+  background: #2563eb;
+  border-radius: 999px;
+  display: block;
+  height: 100%;
+}

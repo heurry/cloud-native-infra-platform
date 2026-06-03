@@ -796,3 +796,19 @@
     min-width: 1100px;
   }
 }
+
+/* 可观测性刷新栏：时间范围 + 刷新间隔下拉 */
+.obs-refresh-meta select {
+  background: #ffffff;
+  border: 1px solid #d8e0eb;
+  border-radius: 6px;
+  color: #334155;
+  cursor: pointer;
+  font-size: 11px;
+  height: 26px;
+  padding: 0 6px;
+}
+.obs-refresh-meta select:disabled {
+  color: #94a3b8;
+  cursor: not-allowed;
+}

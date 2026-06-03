@@ -30,6 +30,11 @@ export function ConfigCenterPage() {
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [namespaceFilter, setNamespaceFilter] = useState("all");
+  const [envFilter, setEnvFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [configTab, setConfigTab] = useState("配置项");
 
   const configQuery = useQuery({
     queryKey: ["config", "items"],
@@ -45,15 +50,19 @@ export function ConfigCenterPage() {
 
   const rows = useMemo(() => deriveConfigRows(configQuery.data?.items), [configQuery.data?.items]);
   const kpis = useMemo(() => buildConfigKpis(configQuery.data?.items), [configQuery.data?.items]);
+  const namespaceOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.namespace))).sort(), [rows]);
+  const envOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.env))).sort(), [rows]);
+  const typeOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.type))).sort(), [rows]);
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
     return rows.filter((row) =>
-      [row.name, row.key, row.namespace, row.env, row.type, row.status, row.owner]
-        .some((value) => String(value).toLowerCase().includes(q))
+      (namespaceFilter === "all" || row.namespace === namespaceFilter) &&
+      (envFilter === "all" || row.env === envFilter) &&
+      (typeFilter === "all" || row.type === typeFilter) &&
+      (!q || [row.name, row.key, row.namespace, row.env, row.type, row.status, row.owner]
+        .some((value) => String(value).toLowerCase().includes(q)))
     );
-  }, [rows, search]);
-  const pageSize = 8;
+  }, [rows, search, namespaceFilter, envFilter, typeFilter]);
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pageRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -84,15 +93,26 @@ export function ConfigCenterPage() {
 
       <section className="infra-panel config-main-panel">
         <div className="config-tabs">
-          {["配置项", "变更记录", "版本历史", "合规检查", "策略管理"].map((tab, index) => (
-            <button className={index === 0 ? "active" : undefined} key={tab} type="button">{tab}</button>
+          {["配置项", "变更记录", "版本历史"].map((t) => (
+            <button className={configTab === t ? "active" : undefined} key={t} onClick={() => setConfigTab(t)} type="button">{t}</button>
           ))}
         </div>
 
+        {configTab === "配置项" && (
+        <>
         <div className="config-toolbar">
-          <button type="button">全部命名空间</button>
-          <button type="button">全部环境</button>
-          <button type="button">全部类型</button>
+          <select className="config-filter" onChange={(event) => { setNamespaceFilter(event.target.value); setPage(1); }} value={namespaceFilter}>
+            <option value="all">全部命名空间</option>
+            {namespaceOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+          </select>
+          <select className="config-filter" onChange={(event) => { setEnvFilter(event.target.value); setPage(1); }} value={envFilter}>
+            <option value="all">全部环境</option>
+            {envOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+          </select>
+          <select className="config-filter" onChange={(event) => { setTypeFilter(event.target.value); setPage(1); }} value={typeFilter}>
+            <option value="all">全部类型</option>
+            {typeOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+          </select>
           <label className="config-search"><Search size={14} />
             <input
               onChange={(event) => {
@@ -142,9 +162,38 @@ export function ConfigCenterPage() {
             <button className={item === currentPage ? "active" : undefined} key={item} onClick={() => setPage(item)} type="button">{item}</button>
           ))}
           <button disabled={currentPage === totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))} type="button">›</button>
-          <button type="button">10 条/页</button>
+          <button onClick={() => { setPageSize((value) => (value === 10 ? 20 : value === 20 ? 50 : 10)); setPage(1); }} type="button">{pageSize} 条/页</button>
           <span className="jump">第 <strong>{currentPage}</strong> / {totalPages} 页</span>
         </div>
+        </>
+        )}
+
+        {configTab !== "配置项" && (
+          <div className="config-change-list config-tab-feed">
+            {auditQuery.isLoading ? (
+              <Skeleton rows={4} />
+            ) : auditQuery.isError ? (
+              <ErrorState error={auditQuery.error} onRetry={auditQuery.refetch} />
+            ) : (() => {
+              const all = auditQuery.data?.events ?? [];
+              const events = configTab === "版本历史" ? all.filter((event) => /publish|rollback|version/i.test(event.action)) : all;
+              return events.length === 0 ? (
+                <EmptyState title={configTab === "版本历史" ? "暂无版本发布 / 回滚记录" : "暂无变更记录"} description="操作配置项后这里会出现审计记录" />
+              ) : (
+                events.map((event) => (
+                  <div className="config-change-row" key={event.id}>
+                    <History size={15} />
+                    <div>
+                      <strong>{event.action}</strong>
+                      <span>{event.resource_id ?? "config_item"}</span>
+                    </div>
+                    <small>{relativeTime(event.created_at)}</small>
+                  </div>
+                ))
+              );
+            })()}
+          </div>
+        )}
       </section>
 
       <div className="config-bottom-grid">

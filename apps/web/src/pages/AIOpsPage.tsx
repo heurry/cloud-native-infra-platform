@@ -1,7 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Bot, CheckCircle, Database, Eye, FileText, GitBranch, MoreVertical, Plus, RefreshCw, Server, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { Bot, CheckCircle, Database, Eye, FileText, GitBranch, MoreVertical, Plus, RefreshCw, Search, Server, ShieldCheck, Sparkles, Users } from "lucide-react";
+
+import { useGoToPage } from "../lib/useGoToPage";
 
 import { KpiGrid, PageHeader, PanelHeader, StatusBadge } from "../components/common/PlatformPrimitives";
 import { EmptyState, ErrorState, Skeleton } from "../components/common/FeedbackStates";
@@ -33,7 +35,11 @@ type AiOpsIncidentRow = {
 };
 
 export function AIOpsPage() {
+  const goTo = useGoToPage();
   const queryClient = useQueryClient();
+  const [incidentSearch, setIncidentSearch] = useState("");
+  const [severityFilter, setSeverityFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const incidentsQuery = useQuery({
     queryKey: ["incidents", "aiops"],
     queryFn: () => api<{ incidents: Incident[] }>("/api/incidents"),
@@ -113,6 +119,16 @@ export function AIOpsPage() {
   });
 
   const incidents = useMemo(() => deriveIncidents(incidentsQuery.data?.incidents), [incidentsQuery.data?.incidents]);
+  const severityOptions = useMemo(() => Array.from(new Set(incidents.map((row) => row.severity))).sort(), [incidents]);
+  const statusOptions = useMemo(() => Array.from(new Set(incidents.map((row) => row.status))).sort(), [incidents]);
+  const filteredIncidents = useMemo(() => {
+    const q = incidentSearch.trim().toLowerCase();
+    return incidents.filter((row) =>
+      (severityFilter === "all" || row.severity === severityFilter) &&
+      (statusFilter === "all" || row.status === statusFilter) &&
+      (!q || `${row.id} ${row.title} ${row.service}`.toLowerCase().includes(q))
+    );
+  }, [incidents, incidentSearch, severityFilter, statusFilter]);
   const diagnoses = useMemo(() => diagnosesQuery.data?.diagnoses ?? [], [diagnosesQuery.data]);
   const diagnosisCount = diagnoses.length;
   const confidences = diagnoses.map((item) => item.confidence ?? 0).filter((value) => value > 0);
@@ -198,11 +214,18 @@ export function AIOpsPage() {
       <section className="infra-panel aiops-incident-panel">
         <PanelHeader title="Incident 列表" action="后端实时数据" />
         <div className="aiops-toolbar">
-          <button type="button">最近 24 小时</button>
-          <button type="button">所有严重性</button>
-          <span>搜索 Incident ID / 标题 / 服务...</span>
-          <button type="button">状态: 全部</button>
-          <button type="button">自定义列</button>
+          <select className="aiops-filter" onChange={(event) => setSeverityFilter(event.target.value)} value={severityFilter}>
+            <option value="all">所有严重性</option>
+            {severityOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+          </select>
+          <select className="aiops-filter" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
+            <option value="all">所有状态</option>
+            {statusOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+          </select>
+          <label className="aiops-search">
+            <Search size={13} />
+            <input onChange={(event) => setIncidentSearch(event.target.value)} placeholder="搜索 Incident ID / 标题 / 服务..." value={incidentSearch} />
+          </label>
         </div>
         <div className="aiops-incident-table">
           <div className="aiops-incident-row header">
@@ -220,10 +243,10 @@ export function AIOpsPage() {
             <Skeleton rows={3} />
           ) : incidentsQuery.isError ? (
             <ErrorState error={incidentsQuery.error} onRetry={incidentsQuery.refetch} />
-          ) : incidents.length === 0 ? (
-            <EmptyState title="暂无 Incident" description="点击「创建 Incident」或等待告警触发" />
+          ) : filteredIncidents.length === 0 ? (
+            <EmptyState title="暂无 Incident" description={incidents.length ? "无匹配的筛选结果" : "点击「创建 Incident」或等待告警触发"} />
           ) : (
-          incidents.map((incident) => (
+          filteredIncidents.map((incident) => (
             <div className="aiops-incident-row" key={incident.id}>
               <span>{incident.id}</span>
               <StatusBadge status={incident.severity} />
@@ -234,7 +257,7 @@ export function AIOpsPage() {
               <StatusBadge status={incident.status} />
               <span>{incident.duration}</span>
               <span className="aiops-row-actions">
-                <button type="button"><Eye size={13} /></button>
+                <button onClick={() => goTo("observability")} type="button" title="查看证据"><Eye size={13} /></button>
                 <button
                   disabled={!incident.rawId || busy}
                   onClick={() => incident.rawId && incidentTransitionMutation.mutate({ id: incident.rawId, action: "ack" })}
@@ -251,7 +274,7 @@ export function AIOpsPage() {
                 >
                   <Bot size={13} />
                 </button>
-                <button type="button"><MoreVertical size={13} /></button>
+                <button onClick={() => goTo("observability")} type="button"><MoreVertical size={13} /></button>
               </span>
             </div>
           )))}
@@ -322,7 +345,7 @@ function buildEvidenceList(metrics: Metrics | undefined, diagnosis: DiagnosisLis
 
 function deriveIncidents(items: Incident[] | undefined): AiOpsIncidentRow[] {
   if (!items?.length) return [];
-  return items.slice(0, 5).map((item) => ({
+  return items.slice(0, 50).map((item) => ({
     id: item.id.slice(0, 8),
     rawId: item.id,
     severity: severityLabel(item.severity),

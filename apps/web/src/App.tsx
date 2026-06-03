@@ -11,7 +11,6 @@ import { AIOpsPage } from "./pages/AIOpsPage";
 import { BenchmarksPage } from "./pages/BenchmarksPage";
 import { KubernetesPage } from "./pages/KubernetesPage";
 import { ConfigCenterPage } from "./pages/ConfigCenterPage";
-import { DemoAppsPage } from "./pages/DemoAppsPage";
 import { KnowledgePage } from "./pages/KnowledgePage";
 import { ObservabilityPage } from "./pages/ObservabilityPage";
 import { PipelinesPage } from "./pages/PipelinesPage";
@@ -82,9 +81,6 @@ export function App() {
         </PageCacheSlot>
         <PageCacheSlot active={page === "models"} mounted={visitedPages.includes("models")}>
           <ModelsPage />
-        </PageCacheSlot>
-        <PageCacheSlot active={page === "demoApps"} mounted={visitedPages.includes("demoApps")}>
-          <DemoAppsPage />
         </PageCacheSlot>
         <PageCacheSlot active={page === "settings"} mounted={visitedPages.includes("settings")}>
           <SettingsPage />
