@@ -106,11 +106,12 @@
   align-items: center;
   display: grid;
   gap: 8px;
-  grid-template-columns: 120px 120px 120px minmax(160px, 1fr) 88px 82px 120px;
+  grid-template-columns: 120px 120px minmax(160px, 1fr) 100px 82px 120px;
   margin-top: 10px;
 }
 
 .pipeline-toolbar button,
+.pipeline-toolbar select,
 .pipeline-toolbar span,
 .pipeline-search,
 .pipeline-pagination button {
@@ -394,22 +395,26 @@
 .pipeline-dist-list div {
   align-items: center;
   display: grid;
-  gap: 6px;
-  grid-template-columns: minmax(0, 1fr) 28px 54px;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
 .pipeline-dist-list span {
   align-items: center;
   color: #334155;
-  display: inline-flex;
+  display: flex;
   font-size: 12px;
   gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .pipeline-dist-list span i {
   background: #2563eb;
   border-radius: 2px;
   display: inline-block;
+  flex: 0 0 auto;
   height: 8px;
   width: 8px;
 }
@@ -420,11 +425,15 @@
 .pipeline-dist-list strong {
   color: #0f172a;
   font-size: 12px;
+  justify-self: end;
 }
 
 .pipeline-dist-list small {
   color: #64748b;
   font-size: 11px;
+  justify-self: end;
+  min-width: 36px;
+  text-align: right;
 }
 
 .pipeline-quality-chart {
