@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/heurry/cloudnative-infra-platform/server/internal/db/sqlcgen"
+	"github.com/heurry/cloudnative-infra-platform/server/internal/store"
 )
 
 // 本文件是"线上格式"边界：sqlc 领域 Row → 前端 DTO 的唯一映射处。
@@ -86,6 +87,36 @@ func toDeploymentDTO(r sqlcgen.ListDeploymentsRow) DeploymentDTO {
 	return DeploymentDTO{
 		ID: r.ID, Name: r.DeploymentKey, Version: r.Version, Env: r.Env, Status: r.Status,
 		StartedAt: tPtr(r.StartedAt), FinishedAt: tPtr(r.FinishedAt), Metadata: jsonObj(r.Metadata),
+	}
+}
+
+// ---- C1：模型注册中心 ----
+
+type ModelVersionDTO struct {
+	ID            string   `json:"id"`
+	ModelID       string   `json:"model_id"`
+	Version       string   `json:"version"`
+	BaseModel     *string  `json:"base_model"`
+	LoraAdapter   *string  `json:"lora_adapter"`
+	ParentVersion *string  `json:"parent_version"`
+	ArtifactURI   *string  `json:"artifact_uri"`
+	Tags          []string `json:"tags"`
+	Status        string   `json:"status"`
+	CreatedBy     *string  `json:"created_by"`
+	CreatedAt     string   `json:"created_at"`
+	UpdatedAt     string   `json:"updated_at"`
+}
+
+func toModelVersionDTO(m store.ModelVersion) ModelVersionDTO {
+	tags := m.Tags
+	if tags == nil {
+		tags = []string{}
+	}
+	return ModelVersionDTO{
+		ID: m.ID, ModelID: m.ModelID, Version: m.Version, BaseModel: m.BaseModel,
+		LoraAdapter: m.LoraAdapter, ParentVersion: m.ParentVersion, ArtifactURI: m.ArtifactURI,
+		Tags: tags, Status: m.Status, CreatedBy: m.CreatedBy,
+		CreatedAt: tStr(m.CreatedAt), UpdatedAt: tStr(m.UpdatedAt),
 	}
 }
 

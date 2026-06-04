@@ -17,7 +17,7 @@
 | 可观测监控 | ✅ 最强项 | `router.go:43-60` metrics/alerts/k8s 快照（client-go 直读） | 指标来自真实 AIBrix/vLLM serving 栈；告警为规则评估 |
 | AI 运维分析 | ✅ 真实 | `ai_handlers.go` Go 聚证据→Python LLM→落库+审计；`/ai/chat:stream` 流式 Copilot | LLM 不可达落 failed 诊断 + 502，降级诚实 |
 | 分层存储 | 🟡 真实但偏静态 | Redis 热缓存 + PG 关系层 + MinIO 对象层(`benchmark_runner.go:239`) + pgvector | 按数据类型分层 + 大产物 offload；**无**自动冷热生命周期迁移 |
-| 元数据管理 | 🟡 浅 | `models.go` 从 `service_instances` 派生 model_id/kind/status | 非独立模型注册中心（无版本/血缘/产物）；前端甚至绕过该端点直读 service-instances |
+| 元数据管理 | ✅ 独立注册中心（C1 已实现） | `models` 表版本化（version/parent_version血缘/lora/tags/artifact）；`/api/models/registry` CRUD + 产物→MinIO + 按 model_id 绑定 service_instances | 真 model registry：版本/血缘/产物/运行时绑定；前端「元数据管理」tab 接真数据 |
 | CI/CD 自动化 | ✅ 真实 rollout（A1 已实现） | 给出 image → `PatchDeploymentImage` + 轮询 `RolloutStatus`（`deploy_runner.go`），成败回写 + 失败自动回滚；未给 image 仍为记录态 | 真改 Deployment 镜像 + 跟踪滚动发布；受 `ALLOW_K8S_WRITES` + 命名空间守卫约束。仍无 build/test 阶段（CD 而非完整 CI） |
 | 弹性扩缩容 | ✅ 可配置（A2 已实现） | 读：`/kubernetes/hpa` HPA spec/status；写：`ScaleDeployment` / `UpsertHPA` / `DeleteHPA`（`client.go`），路由见 `router.go` | 手动扩缩 + 配/删 HPA 真写；受 `ALLOW_K8S_WRITES` + 命名空间允许名单约束，serving 命名空间硬禁 |
 
@@ -91,11 +91,17 @@
 
 ## Phase C · 把「浅/静态」的能力做深
 
-### C1 — 元数据管理做实（独立模型注册中心） 【L】
+### C1 — 元数据管理做实（独立模型注册中心） 【L】✅ 已实现
 - **目标**：从「`/models` 派生自服务注册表」升级为真正的 model registry。
-- **做法**：新 PG 表 `models`（sqlc 迁移）：model_id / version / base_model / lora_adapter / tags / artifact_uri(MinIO) / lineage(父版本) / created_by；CRUD 端点；与 `service_instances` 按 model_id 关联。前端模型页「元数据管理 / 运行时绑定」两 tab 接真数据。
+- **做法**（已落地）：
+  - 迁移 `000009_models`：把既有（无版本、无写入方的）`models` 表升级为版本化台账——加 `version / parent_version(血缘) / lora_adapter / tags / created_by`，唯一约束改 `(model_id, version)`；sqlc 重新生成（`models.sql` 查询 + `sqlc-verify` 一致）。
+  - store `ModelVersion` 领域类型 + CRUD；handlers `model_registry_handlers.go`：`GET/POST /api/models/registry`、`GET/PATCH(status)/DELETE /api/models/registry/{id}`、`POST/GET /api/models/registry/{id}/artifact`（产物 multipart→MinIO + 预签名下载）。
+  - 与 `service_instances` 按 `model_id` 关联：列表/详情带 `bindings`（哪些运行实例在 serve 该 model_id）。注册重复 (model_id,version) → 409。
+  - 前端：`lib/useModelRegistry.ts` + `components/registry/`（RegisterVersionDrawer + ModelRegistryPanel）；模型页「元数据管理」tab 接真注册中心，「注册模型」走真实写接口（删除原会话级占位）。
 - **验收**：
-  - [ ] 注册模型版本（产物存 MinIO）→ 绑定到 vLLM 实例 → 模型页显示版本与血缘
+  - [x] 注册模型版本 → 产物上传至 MinIO → 模型页显示版本/基座+LoRA/血缘/标签/运行时绑定
+  - [x] 状态机 registered→active→deprecated + 注销；血缘链按 parent_version 回溯
+  - [ ] 真栈联调：起 compose（含 MinIO）实际跑一遍注册+上传+绑定展示
 
 ### C2 — 分层存储做出「生命周期」 【M-L】
 - **目标**：从「按类型静态分层」升级为有冷热迁移策略。

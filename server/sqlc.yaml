@@ -12,6 +12,7 @@ sql:
       - "internal/db/migrations/000001_init_core_schema.up.sql"
       - "internal/db/migrations/000004_diagnoses.up.sql"
       - "internal/db/migrations/000005_service_registry.up.sql"
+      - "internal/db/migrations/000009_models.up.sql"
     queries: "internal/db/query"
     gen:
       go:

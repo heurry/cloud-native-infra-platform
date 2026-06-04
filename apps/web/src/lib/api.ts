@@ -8,6 +8,7 @@
 // - 401 统一交给可注册的处理钩子（后续接入登录态）
 
 import type { K8sHPA, ScaleDeploymentInput, UpsertHpaInput } from "../types/platform";
+import type { ModelRegistryList, RegisterModelInput, RegisteredModelVersion } from "../types/registry";
 
 const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -127,6 +128,49 @@ export async function deleteK8sHpa(namespace: string, name: string): Promise<voi
   await api(`/api/kubernetes/hpa/${encodeURIComponent(name)}?namespace=${encodeURIComponent(namespace)}`, {
     method: "DELETE"
   });
+}
+
+// ===== C1：模型注册中心 =====
+
+export function listModelRegistry(): Promise<ModelRegistryList> {
+  return api<ModelRegistryList>("/api/models/registry");
+}
+
+export function registerModelVersion(input: RegisterModelInput): Promise<{ id: string; model_id: string; version: string }> {
+  return api("/api/models/registry", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function updateModelStatus(id: string, status: string): Promise<RegisteredModelVersion> {
+  return api(`/api/models/registry/${encodeURIComponent(id)}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
+}
+
+export async function deleteModelVersion(id: string): Promise<void> {
+  await api(`/api/models/registry/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export function modelArtifactURL(id: string): Promise<{ download_url?: string; external?: boolean; key?: string; note?: string }> {
+  return api(`/api/models/registry/${encodeURIComponent(id)}/artifact`);
+}
+
+/** 上传模型产物到 MinIO（multipart）。不能复用 api()——FormData 需浏览器自动设 multipart boundary。 */
+export async function uploadModelArtifact(id: string, file: File): Promise<{ artifact_uri: string; size: number }> {
+  const requestId = makeRequestId();
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch(`${API_BASE}/api/models/registry/${encodeURIComponent(id)}/artifact`, {
+    method: "POST",
+    body: fd,
+    headers: { "x-request-id": requestId }
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new ApiError(body || res.statusText || `上传失败（${res.status}）`, {
+      status: res.status,
+      requestId: res.headers.get("x-request-id") || requestId,
+      body
+    });
+  }
+  return (await res.json()) as { artifact_uri: string; size: number };
 }
 
 // ===== SSE 流式对话（AI Copilot） =====

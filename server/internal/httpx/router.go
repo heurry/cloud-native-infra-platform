@@ -99,6 +99,14 @@ func NewRouter(a *API) *chi.Mux {
 
 		// 6A：models / proxy / benchmarks 组 Go 原生（取代 legacy 反代）。
 		r.Get("/models", a.models)
+		// C1：独立模型注册中心（版本化 + 血缘 + 产物 + 运行时绑定）。
+		r.Get("/models/registry", a.listModelRegistry)
+		r.Post("/models/registry", a.registerModelVersion)
+		r.Get("/models/registry/{id}", a.getModelVersion)
+		r.Patch("/models/registry/{id}/status", a.updateModelStatus)
+		r.Delete("/models/registry/{id}", a.deleteModelVersion)
+		r.Post("/models/registry/{id}/artifact", a.uploadModelArtifact)
+		r.Get("/models/registry/{id}/artifact", a.modelArtifactURL)
 		r.Post("/proxy/{endpoint_id}/v1/chat/completions", a.proxyChatCompletions)
 		r.Post("/benchmarks/serving", a.createServingBenchmark)
 		r.Get("/benchmarks/{run_id}", a.benchmarkRun)
