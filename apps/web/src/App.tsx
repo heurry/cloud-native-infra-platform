@@ -6,6 +6,8 @@ import { AIOpsCopilotPanel } from "./components/layout/AIOpsCopilotPanel";
 import { SettingsStatusPanel } from "./components/layout/SettingsStatusPanel";
 import { AppSidebar } from "./components/layout/AppSidebar";
 import { PlatformTopBar } from "./components/layout/PlatformTopBar";
+import { LoginModal } from "./components/auth/LoginModal";
+import { useAuth } from "./lib/useAuth";
 import { cn } from "./lib/utils";
 import { AIOpsPage } from "./pages/AIOpsPage";
 import { BenchmarksPage } from "./pages/BenchmarksPage";
@@ -26,6 +28,7 @@ import { pageFromPath, pagePaths, type Page } from "./types/navigation";
 export function App() {
   const location = useLocation();
   const navigate = useNavigate();
+  const auth = useAuth();
 
   // URL 是导航的唯一真实来源；Page 仅作 UI 内部标识。
   const page = pageFromPath(location.pathname, new URLSearchParams(location.search).get("page"));
@@ -102,6 +105,7 @@ export function App() {
       <AIOpsCopilotPanel hidden={page !== "aiOps"} setPage={setPage} />
       {page === "settings" && <SettingsStatusPanel />}
       {page !== "aiOps" && page !== "settings" && page !== "support" && <AICopilotPanel page={page} setPage={setPage} />}
+      {auth.authEnabled && !auth.authenticated ? <LoginModal auth={auth} /> : null}
     </div>
   );
 }

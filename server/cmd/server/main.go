@@ -15,6 +15,7 @@ import (
 
 	"github.com/heurry/cloudnative-infra-platform/server/internal/agentcli"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/aiclient"
+	"github.com/heurry/cloudnative-infra-platform/server/internal/auth"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/blob"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/cache"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/config"
@@ -124,6 +125,12 @@ func main() {
 		RateLimitBurst: cfg.RateLimitBurst,
 		Blob:           blobStore,
 		StorageArchiveEnabled: cfg.StorageArchiveEnabled,
+		AuthEnabled:           cfg.AuthEnabled,
+		Auth:                  auth.NewIssuer(cfg.AuthJWTSecret, cfg.AuthTokenTTL),
+		Users:                 auth.ParseUsers(cfg.AuthUsers),
+	}
+	if cfg.AuthEnabled {
+		slog.Info("auth enabled (RBAC)", "users", len(apiSvc.Users))
 	}
 	router := httpx.NewRouter(apiSvc)
 

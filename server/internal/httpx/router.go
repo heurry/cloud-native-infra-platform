@@ -36,8 +36,15 @@ func NewRouter(a *API) *chi.Mux {
 		// 限流按 IP 令牌桶；幂等仅对带 Idempotency-Key 的 POST 生效。
 		r.Use(a.RateLimit())
 		r.Use(a.Idempotency())
+		// D2：认证（解析 JWT→context）+ 授权（AuthEnabled 时按方法+角色门禁；关闭时透传）。
+		r.Use(a.Authn)
+		r.Use(a.Authz)
 
 		r.Get("/health", Health)
+
+		// D2：认证端点（始终放行，便于前端引导登录）。
+		r.Post("/auth/login", a.login)
+		r.Get("/auth/me", a.me)
 
 		// Phase 1：只读 + 可观测（接口/外形复刻现有 Java 控制面）
 		r.Get("/service-instances", a.serviceInstances)

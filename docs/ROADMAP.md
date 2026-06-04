@@ -25,7 +25,7 @@
 - `/api/chat/sessions`（客服 RAG 会话，含 `messages:stream`、`/feedback`）—— 无前端页。
 - `/api/evals/customer-support`（检索召回评测）—— 无前端页。
 
-**跨切面（生产级，已落地）**：Redis 令牌桶限流 + 幂等键 + cache-aside、统一错误信封、审计日志、request-id、各依赖不可达透明降级、sqlc→store→dto 分层。
+**跨切面（生产级，已落地）**：Redis 令牌桶限流 + 幂等键 + cache-aside、统一错误信封、审计日志、request-id、各依赖不可达透明降级、sqlc→store→dto 分层、D2 认证授权（HS256 JWT + viewer/operator/admin RBAC，默认关，审计绑真实身份）、D1 OTel trace + Prometheus /metrics。
 
 **总体判断**：「管理控制面 + 可观测 + AI 分析」三条线真实闭环；「自动化执行」线（CI/CD 跑流水线、主动扩缩容）是建模/观测而非执行。
 
@@ -142,10 +142,17 @@
   - [x] 代码路径就绪：Go→ai-service→vLLM 经 traceparent 串联
   - [ ] 真栈端到端联调：在 Grafana/Tempo 看到一条请求的端到端 span 瀑布（需起 observability profile + 有流量）
 
-### D2 — 认证授权 / 多租户 RBAC 【L】
-- **做法**：现状 operator 写死为 `defaultOperator`；引入 JWT/OIDC，按路由 authz（只读/写/管理员），审计 actor 绑真实身份；配置中心/部署写操作要求相应角色。
+### D2 — 认证授权 / 多租户 RBAC 【L】✅ 已实现
+- **做法**（已落地，默认关——现有开放演示零影响；开启即 RBAC）：
+  - `internal/auth`：HS256 JWT（stdlib，无第三方依赖）+ 角色 viewer<operator<admin；env-seeded 用户（`AUTH_USERS`，默认 admin/operator/viewer 演示账户，口令同名）。
+  - `httpx/auth.go`：`Authn`（解析 Bearer→context，始终透传）+ `Authz`（`AUTH_ENABLED` 时门禁：读需任一登录态、写[POST/PUT/PATCH/DELETE]需 operator+，`/health` 与 `/auth/*` 放行）；`POST /api/auth/login`、`GET /api/auth/me`。
+  - **审计绑真实身份**：新增 `a.actor(r, fallback)`，把全部写 handler 的 operator 解析从 `defaultOperator` 改为「认证态优先用 JWT 主体」（config/deploy/incident/k8s/registry/storage/ai 全量 sweep）。
+  - 前端：`lib/useAuth.ts`（/auth/me 引导 + login/logout + 401→清令牌重登）；`api.ts` 注入 `Authorization` Bearer（含 SSE/上传）；`LoginModal` 遮罩（认证开启且未登录时）；顶栏用户/角色徽标 + 退出。
+  - config：`AUTH_ENABLED`（默认 false）/`AUTH_JWT_SECRET`/`AUTH_TOKEN_TTL_SECONDS`/`AUTH_USERS`。
 - **验收**：
-  - [ ] 不同角色可见/可做范围不同，审计含真实用户
+  - [x] 不同角色可见/可做范围不同（viewer 读但写 403、operator+ 可写），审计 actor 绑 JWT 真实用户
+  - [x] 默认关时行为不变（httptest 覆盖：关闭透传 / 开启按角色 401·403·200）；auth 包单测覆盖签发/校验/篡改/过期/用户
+  - [ ] OIDC 对接真实 IdP（当前 demo 用 env-seeded 用户 + HS256，生产可换 OIDC）
 
 ### D3 — 平台自托管（Helm/Kustomize 上 K8s） 【M-L】
 - **做法**：为 go-server / ai-service / web 写 Helm chart，部署进 minikube，与 serving 栈同集群；配合 A1 平台甚至能发布自己。docker-compose 退为本地开发态。

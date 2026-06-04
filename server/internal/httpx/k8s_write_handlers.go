@@ -104,7 +104,7 @@ func (a *API) scaleDeployment(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, r, err)
 		return
 	}
-	operator := orDefault(req.Operator, defaultOperator)
+	operator := a.actor(r, req.Operator)
 	a.Store.Audit(r.Context(), operator, "operator", "k8s.deployment.scale", "deployment", req.Namespace+"/"+name,
 		map[string]any{"replicas": newReplicas})
 	a.invalidateK8sSnapshot(r)
@@ -162,7 +162,7 @@ func (a *API) upsertHPA(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, r, err)
 		return
 	}
-	operator := orDefault(req.Operator, defaultOperator)
+	operator := a.actor(r, req.Operator)
 	a.Store.Audit(r.Context(), operator, "operator", "k8s.hpa.upsert", "hpa", req.Namespace+"/"+name,
 		map[string]any{"target": req.TargetName, "min": *req.MinReplicas, "max": *req.MaxReplicas, "cpu": *req.TargetCPUUtil})
 	a.invalidateK8sSnapshot(r)
@@ -181,7 +181,7 @@ func (a *API) deleteHPA(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, r, err)
 		return
 	}
-	a.Store.Audit(r.Context(), defaultOperator, "operator", "k8s.hpa.delete", "hpa", namespace+"/"+name, map[string]any{})
+	a.Store.Audit(r.Context(), a.actor(r, ""), "operator", "k8s.hpa.delete", "hpa", namespace+"/"+name, map[string]any{})
 	a.invalidateK8sSnapshot(r)
 	WriteJSON(w, http.StatusOK, map[string]any{"namespace": namespace, "name": name, "deleted": true})
 }

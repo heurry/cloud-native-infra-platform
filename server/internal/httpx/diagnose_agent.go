@@ -225,7 +225,7 @@ func (a *API) diagnoseAgent(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, http.StatusBadGateway, "ai_unavailable", "AI service not configured")
 		return
 	}
-	operator := orDefault(req.Operator, defaultOperator)
+	operator := a.actor(r, req.Operator)
 	ctx := r.Context()
 
 	var opts *aiclient.DiagnoseOptions
