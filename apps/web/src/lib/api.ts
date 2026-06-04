@@ -7,6 +7,8 @@
 // - 类型化错误 ApiError（带 status / requestId / body），上层可按状态码分支
 // - 401 统一交给可注册的处理钩子（后续接入登录态）
 
+import type { K8sHPA, ScaleDeploymentInput, UpsertHpaInput } from "../types/platform";
+
 const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
 const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -100,6 +102,31 @@ export async function api<T>(path: string, init?: ApiOptions): Promise<T> {
   const text = await response.text();
   if (!text) return undefined as T;
   return JSON.parse(text) as T;
+}
+
+// ===== A2：K8s 弹性扩缩容写操作 =====
+//
+// 写操作受后端双重约束：feature flag（ALLOW_K8S_WRITES）+ 命名空间允许名单 + serving 组件硬禁。
+// 未开启写时后端返回 403（code: k8s_writes_disabled）；命中保护命名空间返回 403（k8s_namespace_protected）。
+
+/** 手动扩缩 Deployment 副本数；返回写入后的期望副本。 */
+export async function scaleK8sDeployment(input: ScaleDeploymentInput): Promise<{ replicas: number }> {
+  return api(`/api/kubernetes/deployments/${encodeURIComponent(input.name)}/scale`, {
+    method: "POST",
+    body: JSON.stringify({ namespace: input.namespace, replicas: input.replicas })
+  });
+}
+
+/** 创建或更新 HPA（按 CPU 利用率水平伸缩 Deployment）；幂等。 */
+export async function upsertK8sHpa(input: UpsertHpaInput): Promise<K8sHPA> {
+  return api(`/api/kubernetes/hpa`, { method: "PUT", body: JSON.stringify(input) });
+}
+
+/** 删除 HPA；幂等（不存在视为成功）。 */
+export async function deleteK8sHpa(namespace: string, name: string): Promise<void> {
+  await api(`/api/kubernetes/hpa/${encodeURIComponent(name)}?namespace=${encodeURIComponent(namespace)}`, {
+    method: "DELETE"
+  });
 }
 
 // ===== SSE 流式对话（AI Copilot） =====

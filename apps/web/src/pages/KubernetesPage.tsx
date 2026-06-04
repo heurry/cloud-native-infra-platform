@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Boxes, MoreVertical, RefreshCw } from "lucide-react";
+import { Boxes, MoreVertical, RefreshCw, Scaling } from "lucide-react";
 
 import { useGoToPage } from "../lib/useGoToPage";
+import { useK8sScaling } from "../lib/useK8sScaling";
 
 import { Donut, KpiGrid, PageHeader, PanelHeader, StatusBadge } from "../components/common/PlatformPrimitives";
 import { EmptyState, ErrorState, Skeleton } from "../components/common/FeedbackStates";
+import { WorkloadScaleDrawer, type ScaleTarget } from "../components/kubernetes/WorkloadScaleDrawer";
 import type { KubernetesWorkloadRow } from "../data/platformSnapshots";
 import { api } from "../lib/api";
 import { bytes, compact, fmt, shortTime } from "../lib/format";
@@ -20,6 +22,8 @@ export function KubernetesPage() {
   const [workloadFilter, setWorkloadFilter] = useState<"all" | "abnormal" | "warning" | "normal">("all");
   const [eventFilter, setEventFilter] = useState<"all" | "warning" | "error">("all");
   const [workloadSearch, setWorkloadSearch] = useState("");
+  const [scaleTarget, setScaleTarget] = useState<ScaleTarget | null>(null);
+  const scaling = useK8sScaling();
   const snapshotQuery = useQuery({
     queryKey: ["kubernetes", "snapshot"],
     queryFn: () => api<KubernetesSnapshot>("/api/kubernetes/snapshot"),
@@ -39,6 +43,17 @@ export function KubernetesPage() {
   const hpas = snapshot?.hpas ?? [];
   const available = snapshot?.available ?? false;
   const disabled = snapshot?.disabled ?? false;
+  // A2：写能力由后端 feature flag 决定；前端据此灰显/启用扩缩容控件（后端仍强约束）。
+  const writesEnabled = snapshot?.writes_enabled ?? false;
+  const writeNamespaces = snapshot?.write_namespaces ?? [];
+  const canWrite = (namespace: string, name: string) => writesEnabled && isWritable(namespace, name, writeNamespaces);
+  const hpaFor = (namespace: string, name: string) =>
+    hpas.find((h) => h.namespace === namespace && h.target_name === name) ?? null;
+  const openScaleFor = (namespace: string, name: string) => {
+    const dep = deployments.find((d) => d.namespace === namespace && d.name === name);
+    const desired = dep?.desired ?? hpaFor(namespace, name)?.desired_replicas ?? 1;
+    setScaleTarget({ namespace, name, desired, ready: dep?.ready ?? "—" });
+  };
 
   const workloadRows = useMemo(() => deriveWorkloads(deployments, pods), [deployments, pods]);
   const eventRows = useMemo(() => deriveEvents(events), [events]);
@@ -175,6 +190,9 @@ export function KubernetesPage() {
       <div className="k8s-mid-grid">
         <section className="infra-panel k8s-workload-panel">
           <PanelHeader title="工作负载健康" action={`显示 ${filteredWorkloadRows.length} / ${workloadRows.length}`} />
+          {available && !writesEnabled ? (
+            <p className="k8s-write-hint">只读模式 · 设置 ALLOW_K8S_WRITES=true 并配置 K8S_WRITE_NAMESPACES 后可在行内扩缩容</p>
+          ) : null}
           <div className="k8s-filter-row">
             <button className={workloadFilter === "all" ? "active" : undefined} onClick={() => setWorkloadFilter("all")} type="button">全部 ({workloadRows.length})</button>
             <button className={workloadFilter === "abnormal" ? "active" : undefined} onClick={() => setWorkloadFilter("abnormal")} type="button">异常 ({workloadRows.filter((row) => row.status === "异常").length})</button>
@@ -212,7 +230,11 @@ export function KubernetesPage() {
                   <span>{row.desired}</span>
                   <span>{row.availability}%</span>
                   <StatusBadge status={row.status} />
-                  <button aria-label={`${row.name} 操作`} onClick={() => goTo("observability")} title="更多操作" type="button"><MoreVertical size={14} /></button>
+                  {canWrite(row.namespace, row.name) ? (
+                    <button aria-label={`${row.name} 弹性伸缩`} onClick={() => openScaleFor(row.namespace, row.name)} title="弹性伸缩（扩缩副本 / 配 HPA）" type="button"><Scaling size={14} /></button>
+                  ) : (
+                    <button aria-label={`${row.name} 操作`} onClick={() => goTo("observability")} title="更多操作" type="button"><MoreVertical size={14} /></button>
+                  )}
                 </div>
               ))
             )}
@@ -304,8 +326,28 @@ export function KubernetesPage() {
           <InfoLine label="CoreDNS" value={pods.length ? (corednsReady ? "Running" : "未就绪") : "—"} />
         </section>
       </div>
+
+      {scaleTarget ? (
+        <WorkloadScaleDrawer
+          target={scaleTarget}
+          hpa={hpaFor(scaleTarget.namespace, scaleTarget.name)}
+          scaling={scaling}
+          onClose={() => setScaleTarget(null)}
+        />
+      ) : null}
     </section>
   );
+}
+
+// isWritable：前端镜像后端命名空间守卫（仅用于灰显控件；后端始终强约束）。
+const PROTECTED_NS = ["kube-system", "kube-public", "kube-node-lease"];
+const PROTECTED_SUBSTR = ["aibrix", "envoy", "vllm", "qwen"];
+function isWritable(namespace: string, name: string, allowlist: string[]): boolean {
+  const ns = namespace.toLowerCase();
+  const target = name.toLowerCase();
+  if (PROTECTED_NS.includes(ns)) return false;
+  if (PROTECTED_SUBSTR.some((p) => ns.includes(p) || target.includes(p))) return false;
+  return allowlist.some((w) => w.toLowerCase() === ns);
 }
 
 function deriveWorkloads(deployments: K8sDeployment[], pods: K8sPod[]): KubernetesWorkloadRow[] {

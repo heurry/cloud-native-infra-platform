@@ -19,7 +19,7 @@
 | 分层存储 | 🟡 真实但偏静态 | Redis 热缓存 + PG 关系层 + MinIO 对象层(`benchmark_runner.go:239`) + pgvector | 按数据类型分层 + 大产物 offload；**无**自动冷热生命周期迁移 |
 | 元数据管理 | 🟡 浅 | `models.go` 从 `service_instances` 派生 model_id/kind/status | 非独立模型注册中心（无版本/血缘/产物）；前端甚至绕过该端点直读 service-instances |
 | CI/CD 自动化 | 🟠 建模非执行 | `ops_handlers.go:triggerDeployment` 仅写记录 + 审计，`finishDeployment` 改状态 | **不跑真实流水线**：无 build/test、无 kubectl rollout；是部署生命周期记录/回滚状态机 |
-| 弹性扩缩容 | 🟠 只读观测 | `/kubernetes/hpa` 经 client-go 读 HPA spec/status（`client.go:306`） | 全栈 K8s 调用**只读**，无 Scale/Apply/Patch；扩缩容由 K8s HPA + AIBrix 执行 |
+| 弹性扩缩容 | ✅ 可配置（A2 已实现） | 读：`/kubernetes/hpa` HPA spec/status；写：`ScaleDeployment` / `UpsertHPA` / `DeleteHPA`（`client.go`），路由见 `router.go` | 手动扩缩 + 配/删 HPA 真写；受 `ALLOW_K8S_WRITES` + 命名空间允许名单约束，serving 命名空间硬禁 |
 
 **已做未露（后端就绪、前端无消费）**：
 - `/api/chat/sessions`（客服 RAG 会话，含 `messages:stream`、`/feedback`）—— 无前端页。
@@ -55,17 +55,18 @@
   - [ ] rollout 状态真实回写到部署记录
 - **风险**：需安全的演示目标 Deployment（勿打 AIBrix 自身），建议部署 `demo-echo` 专供发布演示；写权限需 kubeconfig/RBAC 放开。
 
-### A2 — 弹性扩缩容从「只读 HPA」升级为「配 HPA + 手动扩缩」 【M】
-- **目标**：平台能创建/修改 HPA（min/max/目标利用率），也能对 Deployment 直接 scale。
-- **做法**：
-  - `client.go` 增 `AutoscalingV2().HorizontalPodAutoscalers(ns).Create/Patch` 与 Deployment `scale` 子资源写。
-  - `router.go` 增 `POST/PUT /kubernetes/hpa`、`POST /kubernetes/deployments/{name}/scale`。
-  - 前端 Kubernetes 页：HPA 行加「编辑阈值」、Deployment 行加「扩/缩」（替换之前删掉的死按钮，符合 no-placeholder）。
-  - 实时回显 `desired vs current replicas`（已有读路径）。
+### A2 — 弹性扩缩容从「只读 HPA」升级为「配 HPA + 手动扩缩」 【M】✅ 已实现
+- **目标**：平台能创建/修改/删除 HPA（min/max/目标 CPU 利用率），也能对 Deployment 直接 scale。
+- **做法**（已落地）：
+  - `client.go` 增 `ScaleDeployment`（scale 子资源 Get/Update）、`UpsertHPA`（AutoscalingV2 Create/Update，幂等）、`DeleteHPA`；`hpaToSnapshot` 在读/写路径共用。
+  - `router.go` 增 `POST /kubernetes/deployments/{name}/scale`、`PUT /kubernetes/hpa`、`DELETE /kubernetes/hpa/{name}`。写后失效集群快照缓存、落审计（`k8s.deployment.scale` / `k8s.hpa.upsert` / `k8s.hpa.delete`）。
+  - **安全写路径基建（同时给 A1 铺路）**：`ALLOW_K8S_WRITES` feature flag（默认关）+ `K8S_WRITE_NAMESPACES` 命名空间允许名单 + serving 组件（aibrix/envoy/vllm/qwen）与系统命名空间硬禁；`k8sWriteGuard` 统一校验，未开启返回 403。
+  - 前端 Kubernetes 页：`snapshot.writes_enabled/write_namespaces` 驱动控件灰显；工作负载行内「弹性伸缩」按钮 → `WorkloadScaleDrawer`（手动扩缩 section + HPA 配置 section）；写逻辑收敛在 `lib/useK8sScaling.ts`。只读时显示 hint。
 - **验收**：
-  - [ ] 改 HPA target 后压测打流量，副本随真实负载伸缩
-  - [ ] 手动 scale 立即生效并落审计
-- **风险**：勿与 AIBrix 自带扩缩容打架——操作对象选 demo workload，或明确「AIBrix 托管的不允许外部 HPA」。
+  - [x] 手动 scale 立即生效并落审计（写后 invalidate 快照，10s 内回显）
+  - [x] 配/删 HPA 幂等、落审计；HPA 状态读路径实时回显 `desired vs current`
+  - [ ] 改 HPA target 后压测打流量、副本随真实负载伸缩（需 metrics-server + demo workload，留待联调）
+- **风险处置**：默认不碰 AIBrix/vLLM serving 命名空间（硬禁 + 允许名单双保险）；操作对象限 `default` 等显式放行的 demo workload。
 
 ---
 

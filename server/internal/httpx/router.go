@@ -48,6 +48,10 @@ func NewRouter(a *API) *chi.Mux {
 			r.Get("/hpa", a.k8sNative(false, false, false, false, true)) // 5B.3
 			// 5B.4a：整集群快照走 cache-aside（命中真实 minikube，开销大；10s TTL）。
 			r.Get("/snapshot", a.cached(cacheKeyK8sSnapshot, 10*time.Second, a.k8sNative(true, true, true, true, true)))
+			// A2：弹性扩缩容真配（feature flag + 命名空间守卫；默认不碰 serving 命名空间）。
+			r.Post("/deployments/{name}/scale", a.scaleDeployment)
+			r.Put("/hpa", a.upsertHPA)
+			r.Delete("/hpa/{name}", a.deleteHPA)
 		})
 
 		r.Route("/metrics", func(r chi.Router) {

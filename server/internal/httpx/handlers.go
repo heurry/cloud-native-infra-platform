@@ -31,6 +31,9 @@ type API struct {
 	AIProxy     *Proxy           // Phase 3：SSE 透传到 AI 服务（chat:stream）
 	K8s         *k8s.Collector   // Phase 5 / 5B.1：控制面 client-go 直读集群（nil=未配置）
 	K8sErr      string           // collector 初始化错误（降级展示用）
+	// A2：K8s 写权限（弹性扩缩容真配）。默认关闭；开启时仍受命名空间允许名单约束。
+	AllowK8sWrites     bool
+	K8sWriteNamespaces []string
 	Serving     *serving.Scraper // Phase 5 / Option A：vLLM Prometheus 指标抓取器（nil=未启用）
 	Cadvisor    *metrics.CadvisorCollector
 	CORSOrigins []string
