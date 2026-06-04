@@ -503,3 +503,75 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ===== A2：弹性扩缩容真配（行内只读提示 + 抽屉内表单） ===== */
+.k8s-write-hint {
+  margin: 0 0 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px dashed #e2e8f0;
+  border-radius: 8px;
+}
+
+/* 抽屉内（深色主题）控件：复用全局设计令牌，与 drawer-input 一致。 */
+.k8s-scale-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted-foreground, #94a3b8);
+}
+.k8s-scale-error {
+  margin: 0;
+  font-size: 12px;
+  color: #f97316;
+}
+.k8s-replica-stepper {
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  gap: 8px;
+  align-items: stretch;
+}
+.k8s-replica-stepper button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--foreground, #e2e8f0);
+  background: var(--muted, rgba(148, 163, 184, 0.12));
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+  border-radius: var(--radius, 8px);
+  cursor: pointer;
+}
+.k8s-replica-stepper button:hover:not(:disabled) { border-color: var(--accent-solid); }
+.k8s-replica-stepper button:disabled { opacity: 0.4; cursor: not-allowed; }
+.k8s-replica-stepper input {
+  width: 100%;
+  padding: 8px 10px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--foreground, #e2e8f0);
+  background: var(--muted, rgba(148, 163, 184, 0.12));
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+  border-radius: var(--radius, 8px);
+  box-sizing: border-box;
+}
+.k8s-replica-stepper input:focus { outline: none; border-color: var(--accent-solid); }
+.k8s-hpa-form {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.k8s-hpa-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted-foreground, #94a3b8);
+}
+.k8s-hpa-form label input { text-align: center; }
+.k8s-hpa-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}

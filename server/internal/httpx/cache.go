@@ -74,6 +74,13 @@ func (a *API) invalidateOverview(r *http.Request) {
 	}
 }
 
+// invalidateK8sSnapshot 在 K8s 写操作（扩缩容 / HPA）后失效集群快照缓存，使前端立即看到新状态；降级态 no-op。
+func (a *API) invalidateK8sSnapshot(r *http.Request) {
+	if a.Cache != nil {
+		a.Cache.Del(r.Context(), cacheKeyK8sSnapshot)
+	}
+}
+
 // clientIP 提取限流键用的客户端 IP：优先 X-Forwarded-For 首跳，否则 RemoteAddr。
 func clientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {

@@ -245,6 +245,20 @@ export type KubernetesSnapshot = {
   events: K8sEvent[];
   nodes: K8sNode[];
   hpas: K8sHPA[];
+  // A2：弹性扩缩容真配——后端据 feature flag 暴露写能力与可写命名空间名单。
+  writes_enabled?: boolean;
+  write_namespaces?: string[];
+};
+
+// A2：K8s 写操作入参（手动扩缩 Deployment / 配置 HPA）。
+export type ScaleDeploymentInput = { namespace: string; name: string; replicas: number };
+export type UpsertHpaInput = {
+  namespace: string;
+  name?: string;
+  target_name: string;
+  min_replicas: number;
+  max_replicas: number;
+  target_cpu_util: number;
 };
 
 export type BenchmarkEvent = {

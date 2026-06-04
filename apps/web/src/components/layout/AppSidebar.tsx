@@ -4,12 +4,14 @@ import {
   Cpu,
   Database,
   Gauge,
+  Headset,
   Home,
   Library,
   Network,
   Route,
   Server,
   Settings,
+  Target,
   type LucideIcon
 } from "lucide-react";
 
@@ -28,6 +30,8 @@ const navItems: Array<{ id: Page; label: string; icon: LucideIcon }> = [
   { id: "benchmarks", label: "压测验证", icon: Gauge },
   { id: "models", label: "模型注册", icon: Cpu },
   { id: "knowledge", label: "知识库 / RAG", icon: Library },
+  { id: "support", label: "智能客服", icon: Headset },
+  { id: "evals", label: "检索评测", icon: Target },
   { id: "settings", label: "设置", icon: Settings }
 ];
 

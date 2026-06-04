@@ -20,7 +20,7 @@ import { api } from "../lib/api";
 import { compactMeta, fmt, relativeTime, shortTime } from "../lib/format";
 import { cn } from "../lib/utils";
 import { useGoToPage } from "../lib/useGoToPage";
-import type { Deployment } from "../types/ops";
+import type { Deployment, DeploymentMeta } from "../types/ops";
 import type { KpiItem } from "../types/ui";
 
 const RUNNING = "running";
@@ -225,6 +225,8 @@ function PipelineTableRow({
   busy: boolean;
 }) {
   const isRunning = normalizeStatus(row.source.status) === RUNNING || row.status === "运行中";
+  const meta = row.source.metadata;
+  const isRollout = meta.mode === "k8s_rollout";
   const goTo = useGoToPage();
   return (
     <div className="pipeline-table-row">
@@ -242,16 +244,28 @@ function PipelineTableRow({
       </span>
       <span className="pipeline-status-cell">
         <StatusBadge status={row.status} />
-        <small>{row.stageMeta}</small>
+        <small>{isRollout && meta.phase ? phaseLabel(meta.phase) : row.stageMeta}</small>
       </span>
       <span className="pipeline-stage-cell">
-        <strong>{row.stage}</strong>
-        {isRunning ? <em /> : null}
+        {isRollout ? (
+          <RolloutProgress meta={meta} running={isRunning} />
+        ) : (
+          <>
+            <strong>{row.stage}</strong>
+            {isRunning ? <em /> : null}
+          </>
+        )}
       </span>
       <span>{row.duration}</span>
       <span className="pipeline-row-actions">
         <button onClick={() => goTo("observability")} type="button" title="查看详情"><Eye color="#2563eb" size={14} strokeWidth={2.5} /></button>
-        {isRunning ? (
+        {isRollout ? (
+          isRunning ? (
+            <em className="pipeline-rollout-managed" title={meta.message}>自动发布中</em>
+          ) : (
+            <button onClick={() => goTo("observability")} type="button" title="更多"><MoreVertical color="#2563eb" size={14} strokeWidth={2.5} /></button>
+          )
+        ) : isRunning ? (
           <>
             <button disabled={busy} onClick={() => onFinish("success")} type="button" title="标记成功"><CheckCircle color="#2563eb" size={14} strokeWidth={2.5} /></button>
             <button disabled={busy} onClick={() => onFinish("failed")} type="button" title="标记失败"><XCircle color="#2563eb" size={14} strokeWidth={2.5} /></button>
@@ -267,16 +281,57 @@ function PipelineTableRow({
   );
 }
 
+// RolloutProgress：真实 K8s rollout 的实时进度（相位 + ready/desired + 进度条）。
+function RolloutProgress({ meta, running }: { meta: DeploymentMeta; running: boolean }) {
+  const pct = typeof meta.progress === "number" ? meta.progress : running ? 0 : 100;
+  const tone = meta.phase === "rolled_back" || meta.phase === "failed" ? "danger" : meta.phase === "succeeded" ? "success" : "warning";
+  return (
+    <div className="pipeline-rollout">
+      <div className="pipeline-rollout-head">
+        <strong>{phaseLabel(meta.phase)}</strong>
+        <small>{meta.ready ?? 0}/{meta.desired ?? "?"} ready</small>
+      </div>
+      <div className="pipeline-rollout-bar"><i className={tone} style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} /></div>
+    </div>
+  );
+}
+
+function phaseLabel(phase?: string): string {
+  switch (phase) {
+    case "queued": return "排队中";
+    case "patching": return "更新镜像";
+    case "progressing": return "滚动发布中";
+    case "succeeded": return "发布成功";
+    case "rolling_back": return "回滚中";
+    case "rolled_back": return "已回滚";
+    case "failed": return "失败";
+    default: return phase || "—";
+  }
+}
+
 function TriggerDeployDrawer({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ name: "", version: "latest", env: "prod", image: "", branch: "main", gate: "approved", owner: "system" });
+  const [form, setForm] = useState({ name: "", version: "latest", env: "prod", namespace: "default", image: "", owner: "system" });
   const set = (k: keyof typeof form) => (e: ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
+  const realRollout = form.image.trim() !== "";
+
   const triggerMutation = useMutation({
-    mutationFn: () => api("/api/deployments", { method: "POST", body: JSON.stringify(form) }),
+    mutationFn: () =>
+      api("/api/deployments", {
+        method: "POST",
+        body: JSON.stringify({
+          name: form.name.trim(),
+          version: form.version,
+          env: form.env,
+          namespace: form.namespace.trim(),
+          image: form.image.trim(),
+          operator: form.owner
+        })
+      }),
     onSuccess: () => {
-      toast.success("部署已触发");
+      toast.success(realRollout ? "已触发真实 rollout" : "部署记录已创建");
       qc.invalidateQueries({ queryKey: ["deployments"] });
       onClose();
     },
@@ -286,20 +341,24 @@ function TriggerDeployDrawer({ onClose }: { onClose: () => void }) {
   return (
     <Drawer open title="触发部署" subtitle="创建一次新的发布流水线" onClose={onClose}>
       <div className="drawer-section">
-        <input className="drawer-input" placeholder="服务名" value={form.name} onChange={set("name")} />
+        <input className="drawer-input" placeholder="服务名 / Deployment 名" value={form.name} onChange={set("name")} />
         <input className="drawer-input" placeholder="版本" value={form.version} onChange={set("version")} />
         <input className="drawer-input" placeholder="环境（dev/staging/prod）" value={form.env} onChange={set("env")} />
-        <input className="drawer-input" placeholder="镜像" value={form.image} onChange={set("image")} />
-        <input className="drawer-input" placeholder="分支" value={form.branch} onChange={set("branch")} />
-        <input className="drawer-input" placeholder="门禁" value={form.gate} onChange={set("gate")} />
+        <input className="drawer-input" placeholder="目标命名空间（真实 rollout 用）" value={form.namespace} onChange={set("namespace")} />
+        <input className="drawer-input" placeholder="镜像（留空=仅登记记录；填写=真实 rollout）" value={form.image} onChange={set("image")} />
         <input className="drawer-input" placeholder="Owner" value={form.owner} onChange={set("owner")} />
+        <p className="pipeline-rollout-hint">
+          {realRollout
+            ? `将 patch ${form.namespace || "default"}/${form.name || "<deployment>"} 镜像为 ${form.image.trim()} 并跟踪滚动发布，失败自动回滚（需 ALLOW_K8S_WRITES，且非 serving 命名空间）。`
+            : "留空镜像：仅登记部署记录（不触达集群）。填写镜像 + 命名空间即触发真实 K8s rollout。"}
+        </p>
         <button
           className="infra-action-btn"
           type="button"
           disabled={!form.name.trim() || triggerMutation.isPending}
           onClick={() => triggerMutation.mutate()}
         >
-          {triggerMutation.isPending ? "触发中..." : "触发部署"}
+          {triggerMutation.isPending ? "触发中..." : realRollout ? "触发真实 rollout" : "登记部署记录"}
         </button>
       </div>
     </Drawer>

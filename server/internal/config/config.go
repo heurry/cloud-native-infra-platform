@@ -16,7 +16,10 @@ type Config struct {
 	AIServiceBaseURL string        // Python AI 服务（Phase 3：diagnose + chat:stream + embed）
 	AIRequestTimeout time.Duration // 调 AI 诊断的超时（含 LLM 推理，默认 90s）
 	KubeconfigPath   string        // Phase 5/5B.1：控制面 client-go 的 kubeconfig（空=in-cluster 或默认规则）
-	RegistryTTL      time.Duration // Phase 5/5B.2：心跳 TTL（超时未心跳→unreachable）
+	// A2：K8s 写权限（弹性扩缩容真配）。默认关闭——读永远可用、写需显式开启。
+	AllowK8sWrites     bool     // 总开关；false 时所有 K8s 写接口返回 403
+	K8sWriteNamespaces []string // 可写命名空间允许名单（即便开启写也只放行名单内；默认 default）
+	RegistryTTL        time.Duration // Phase 5/5B.2：心跳 TTL（超时未心跳→unreachable）
 	RegistrySweep    time.Duration // Phase 5/5B.2：reaper 清扫周期
 	ServingScrape    time.Duration // Phase 5/Option A：抓取 vLLM Prometheus 指标的周期
 	VLLMMetricsPort  string        // vLLM /metrics 端口（默认 8000）
@@ -43,6 +46,8 @@ func Load() Config {
 		AIServiceBaseURL: env("AI_SERVICE_BASE_URL", "http://127.0.0.1:8200"),
 		AIRequestTimeout: envSeconds("AI_REQUEST_TIMEOUT_SECONDS", 90*time.Second),
 		KubeconfigPath:   env("KUBECONFIG", ""),
+		AllowK8sWrites:     envBool("ALLOW_K8S_WRITES", false),
+		K8sWriteNamespaces: splitCSV(env("K8S_WRITE_NAMESPACES", "default")),
 		RegistryTTL:      envSeconds("REGISTRY_TTL_SECONDS", 30*time.Second),
 		RegistrySweep:    envSeconds("REGISTRY_SWEEP_SECONDS", 15*time.Second),
 		ServingScrape:    envSeconds("SERVING_SCRAPE_SECONDS", 10*time.Second),

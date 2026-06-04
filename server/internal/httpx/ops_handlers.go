@@ -153,10 +153,12 @@ func (a *API) deployments(w http.ResponseWriter, r *http.Request) {
 }
 
 type triggerDeployReq struct {
-	Name     string `json:"name"`
-	Version  string `json:"version"`
-	Env      string `json:"env"`
-	Operator string `json:"operator"`
+	Name      string `json:"name"`
+	Version   string `json:"version"`
+	Env       string `json:"env"`
+	Namespace string `json:"namespace"` // A1：真实 rollout 的目标命名空间（与 image 同时给出时启用）
+	Image     string `json:"image"`     // A1：新镜像；给出则走真实 K8s rollout，否则记录态
+	Operator  string `json:"operator"`
 }
 
 func (a *API) triggerDeployment(w http.ResponseWriter, r *http.Request) {
@@ -172,6 +174,30 @@ func (a *API) triggerDeployment(w http.ResponseWriter, r *http.Request) {
 	operator := orDefault(req.Operator, defaultOperator)
 	version := orDefault(req.Version, "latest")
 	env := orDefault(req.Env, "dev")
+
+	// A1：给出 image 即请求真实 rollout——复用 A2 写权限守卫（未开启/受保护命名空间→403），
+	// 后台 patch 镜像 + 轮询滚动发布，失败自动回滚。未给 image 时保持既有「记录态」行为。
+	if req.Image != "" {
+		if !a.k8sWriteGuard(w, r, req.Namespace, req.Name) {
+			return
+		}
+		meta := map[string]any{
+			"owner": operator, "mode": "k8s_rollout",
+			"target_namespace": req.Namespace, "target_name": req.Name,
+			"image": req.Image, "phase": "queued",
+		}
+		id, err := a.Store.CreateDeploymentMeta(r.Context(), req.Name, version, env, meta)
+		if err != nil {
+			a.fail(w, r, err)
+			return
+		}
+		a.Store.Audit(r.Context(), operator, "operator", "deployment.trigger", "deployment", req.Name,
+			map[string]any{"version": version, "env": env, "namespace": req.Namespace, "image": req.Image, "mode": "k8s_rollout"})
+		go a.runDeploymentRollout(id, rolloutTarget{Namespace: req.Namespace, Name: req.Name, Image: req.Image, Operator: operator}, meta)
+		WriteJSON(w, http.StatusOK, map[string]any{"id": id, "name": req.Name, "status": "running", "mode": "k8s_rollout"})
+		return
+	}
+
 	id, err := a.Store.CreateDeployment(r.Context(), req.Name, version, env, operator)
 	if err != nil {
 		a.fail(w, r, err)

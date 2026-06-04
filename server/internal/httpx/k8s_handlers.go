@@ -22,15 +22,24 @@ func (a *API) k8sSnapshot(ctx context.Context, wantPods, wantDeploys, wantEvents
 			msg = "kubernetes integration not configured"
 		}
 		return k8s.Snapshot{
-			Available:   false,
-			Disabled:    true,
-			Error:       msg,
-			Pods:        []k8s.PodSnapshot{},
-			Deployments: []k8s.DeploymentSnapshot{},
-			Events:      []k8s.EventSnapshot{},
-			Nodes:       []k8s.NodeSnapshot{},
-			Hpas:        []k8s.HPASnapshot{},
+			Available:       false,
+			Disabled:        true,
+			Error:           msg,
+			Pods:            []k8s.PodSnapshot{},
+			Deployments:     []k8s.DeploymentSnapshot{},
+			Events:          []k8s.EventSnapshot{},
+			Nodes:           []k8s.NodeSnapshot{},
+			Hpas:            []k8s.HPASnapshot{},
+			WritesEnabled:   false,
+			WriteNamespaces: []string{},
 		}
 	}
-	return a.K8s.CollectSnapshot(ctx, wantPods, wantDeploys, wantEvents, wantNodes, wantHPAs)
+	snap := a.K8s.CollectSnapshot(ctx, wantPods, wantDeploys, wantEvents, wantNodes, wantHPAs)
+	// A2：把写能力暴露给前端（控件灰显/启用），由 config 决定（不影响只读快照）。
+	snap.WritesEnabled = a.AllowK8sWrites
+	snap.WriteNamespaces = a.K8sWriteNamespaces
+	if snap.WriteNamespaces == nil {
+		snap.WriteNamespaces = []string{}
+	}
+	return snap
 }

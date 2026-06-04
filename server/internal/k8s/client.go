@@ -13,9 +13,12 @@ import (
 	"strings"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -90,6 +93,9 @@ type Snapshot struct {
 	Events      []EventSnapshot      `json:"events"`
 	Nodes       []NodeSnapshot       `json:"nodes"`
 	Hpas        []HPASnapshot        `json:"hpas"`
+	// A2：写能力暴露给前端，用于灰显/启用扩缩容控件（由 handler 据 config 填充）。
+	WritesEnabled   bool     `json:"writes_enabled"`
+	WriteNamespaces []string `json:"write_namespaces"`
 }
 
 type Collector struct{ clientset *kubernetes.Clientset }
@@ -295,23 +301,7 @@ func (c *Collector) collectHPAs(ctx context.Context) ([]HPASnapshot, error) {
 	}
 	out := make([]HPASnapshot, 0, len(list.Items))
 	for i := range list.Items {
-		h := &list.Items[i]
-		minReplicas := int32(1)
-		if h.Spec.MinReplicas != nil {
-			minReplicas = *h.Spec.MinReplicas
-		}
-		out = append(out, HPASnapshot{
-			Namespace:       h.Namespace,
-			Name:            h.Name,
-			TargetKind:      h.Spec.ScaleTargetRef.Kind,
-			TargetName:      h.Spec.ScaleTargetRef.Name,
-			MinReplicas:     int(minReplicas),
-			MaxReplicas:     int(h.Spec.MaxReplicas),
-			CurrentReplicas: int(h.Status.CurrentReplicas),
-			DesiredReplicas: int(h.Status.DesiredReplicas),
-			Metric:          hpaMetric(h),
-			ScalingActive:   hpaScalingActive(h),
-		})
+		out = append(out, hpaToSnapshot(&list.Items[i]))
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Namespace != out[j].Namespace {
@@ -320,6 +310,175 @@ func (c *Collector) collectHPAs(ctx context.Context) ([]HPASnapshot, error) {
 		return out[i].Name < out[j].Name
 	})
 	return out, nil
+}
+
+// hpaToSnapshot 把一个 HPA 资源映射为对外 HPASnapshot（collectHPAs / UpsertHPA 共用）。
+func hpaToSnapshot(h *autoscalingv2.HorizontalPodAutoscaler) HPASnapshot {
+	minReplicas := int32(1)
+	if h.Spec.MinReplicas != nil {
+		minReplicas = *h.Spec.MinReplicas
+	}
+	return HPASnapshot{
+		Namespace:       h.Namespace,
+		Name:            h.Name,
+		TargetKind:      h.Spec.ScaleTargetRef.Kind,
+		TargetName:      h.Spec.ScaleTargetRef.Name,
+		MinReplicas:     int(minReplicas),
+		MaxReplicas:     int(h.Spec.MaxReplicas),
+		CurrentReplicas: int(h.Status.CurrentReplicas),
+		DesiredReplicas: int(h.Status.DesiredReplicas),
+		Metric:          hpaMetric(h),
+		ScalingActive:   hpaScalingActive(h),
+	}
+}
+
+// ---- A2：写操作（弹性扩缩容真配）。调用方负责 feature flag + 命名空间守卫。 ----
+
+// ScaleDeployment 经 scale 子资源设置 Deployment 副本数，返回写入后的期望副本。
+func (c *Collector) ScaleDeployment(ctx context.Context, namespace, name string, replicas int32) (int32, error) {
+	scale, err := c.clientset.AppsV1().Deployments(namespace).GetScale(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return 0, err
+	}
+	scale.Spec.Replicas = replicas
+	updated, err := c.clientset.AppsV1().Deployments(namespace).UpdateScale(ctx, name, scale, metav1.UpdateOptions{})
+	if err != nil {
+		return 0, err
+	}
+	return updated.Spec.Replicas, nil
+}
+
+// HPASpec 是配置 HPA 的入参（按 CPU 平均利用率水平伸缩 Deployment）。
+type HPASpec struct {
+	Namespace     string
+	Name          string
+	TargetName    string // 被伸缩的 Deployment 名
+	MinReplicas   int32
+	MaxReplicas   int32
+	TargetCPUUtil int32 // 目标 CPU 平均利用率（%）
+}
+
+// UpsertHPA 创建或更新一个 autoscaling/v2 HPA，返回写入后的快照（幂等：不存在则建，存在则覆盖 spec）。
+func (c *Collector) UpsertHPA(ctx context.Context, spec HPASpec) (HPASnapshot, error) {
+	client := c.clientset.AutoscalingV2().HorizontalPodAutoscalers(spec.Namespace)
+	minReplicas := spec.MinReplicas
+	targetCPU := spec.TargetCPUUtil
+	desiredSpec := autoscalingv2.HorizontalPodAutoscalerSpec{
+		ScaleTargetRef: autoscalingv2.CrossVersionObjectReference{
+			APIVersion: "apps/v1",
+			Kind:       "Deployment",
+			Name:       spec.TargetName,
+		},
+		MinReplicas: &minReplicas,
+		MaxReplicas: spec.MaxReplicas,
+		Metrics: []autoscalingv2.MetricSpec{{
+			Type: autoscalingv2.ResourceMetricSourceType,
+			Resource: &autoscalingv2.ResourceMetricSource{
+				Name: corev1.ResourceCPU,
+				Target: autoscalingv2.MetricTarget{
+					Type:               autoscalingv2.UtilizationMetricType,
+					AverageUtilization: &targetCPU,
+				},
+			},
+		}},
+	}
+	existing, err := client.Get(ctx, spec.Name, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			created, cErr := client.Create(ctx, &autoscalingv2.HorizontalPodAutoscaler{
+				ObjectMeta: metav1.ObjectMeta{Name: spec.Name, Namespace: spec.Namespace},
+				Spec:       desiredSpec,
+			}, metav1.CreateOptions{})
+			if cErr != nil {
+				return HPASnapshot{}, cErr
+			}
+			return hpaToSnapshot(created), nil
+		}
+		return HPASnapshot{}, err
+	}
+	existing.Spec = desiredSpec
+	updated, uErr := client.Update(ctx, existing, metav1.UpdateOptions{})
+	if uErr != nil {
+		return HPASnapshot{}, uErr
+	}
+	return hpaToSnapshot(updated), nil
+}
+
+// DeleteHPA 删除一个 HPA（不存在视为成功，幂等）。
+func (c *Collector) DeleteHPA(ctx context.Context, namespace, name string) error {
+	err := c.clientset.AutoscalingV2().HorizontalPodAutoscalers(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	if err != nil && apierrors.IsNotFound(err) {
+		return nil
+	}
+	return err
+}
+
+// ---- A1：真实 rollout 执行（改 Deployment 镜像 + 轮询滚动发布状态）。调用方负责守卫。 ----
+
+// PatchDeploymentImage 用 strategic-merge patch 把首个容器镜像改为 image，返回改之前的镜像（供回滚）。
+func (c *Collector) PatchDeploymentImage(ctx context.Context, namespace, name, image string) (string, error) {
+	dep, err := c.clientset.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+	containers := dep.Spec.Template.Spec.Containers
+	if len(containers) == 0 {
+		return "", fmt.Errorf("deployment %s/%s has no containers", namespace, name)
+	}
+	prev := containers[0].Image
+	// 按容器名定位（strategic-merge 对 list 以 name 为 merge key）。
+	patch := fmt.Sprintf(`{"spec":{"template":{"spec":{"containers":[{"name":%q,"image":%q}]}}}}`,
+		containers[0].Name, image)
+	if _, err := c.clientset.AppsV1().Deployments(namespace).Patch(
+		ctx, name, k8stypes.StrategicMergePatchType, []byte(patch), metav1.PatchOptions{}); err != nil {
+		return "", err
+	}
+	return prev, nil
+}
+
+// RolloutSnapshot 概括一次滚动发布的进度（对齐 kubectl rollout status 的判定输入）。
+type RolloutSnapshot struct {
+	Desired   int32
+	Updated   int32
+	Ready     int32
+	Available int32
+	Complete  bool   // 已全量就绪且 observedGeneration 追平
+	Failed    bool   // Progressing 条件为 ProgressDeadlineExceeded
+	Reason    string // Progressing 条件 reason
+	Message   string // Progressing 条件 message
+}
+
+// RolloutStatus 读取 Deployment 当前滚动发布状态。
+func (c *Collector) RolloutStatus(ctx context.Context, namespace, name string) (RolloutSnapshot, error) {
+	dep, err := c.clientset.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return RolloutSnapshot{}, err
+	}
+	desired := int32(1)
+	if dep.Spec.Replicas != nil {
+		desired = *dep.Spec.Replicas
+	}
+	s := RolloutSnapshot{
+		Desired:   desired,
+		Updated:   dep.Status.UpdatedReplicas,
+		Ready:     dep.Status.ReadyReplicas,
+		Available: dep.Status.AvailableReplicas,
+	}
+	for _, cond := range dep.Status.Conditions {
+		if cond.Type == appsv1.DeploymentProgressing {
+			s.Reason = cond.Reason
+			s.Message = cond.Message
+			if cond.Reason == "ProgressDeadlineExceeded" {
+				s.Failed = true
+			}
+		}
+	}
+	// kubectl rollout status 判定：观测代追平 + 新副本全部 updated/ready/available。
+	if dep.Status.ObservedGeneration >= dep.Generation &&
+		s.Updated == desired && s.Ready == desired && s.Available == desired {
+		s.Complete = true
+	}
+	return s, nil
 }
 
 // hpaMetric 把首个 metric 的目标与当前值格式化为 "cpu 45%/70%"（当前未知时 <unknown>）。

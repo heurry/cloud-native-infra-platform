@@ -37,6 +37,7 @@ func (a *API) createCustomerSupportEval(w http.ResponseWriter, r *http.Request) 
 
 	ctx := r.Context()
 	total, h1, h3, h5 := 0, 0, 0, 0
+	samples := make([]map[string]any, 0, len(req.QASamples))
 	for _, s := range req.QASamples {
 		if s.Question == "" || len(s.DocIDs) == 0 {
 			continue
@@ -60,15 +61,25 @@ func (a *API) createCustomerSupportEval(w http.ResponseWriter, r *http.Request) 
 			ids[i] = h.DocID
 		}
 		total++
-		if hitAtK(gold, ids, 1) {
+		hit1, hit3, hit5 := hitAtK(gold, ids, 1), hitAtK(gold, ids, 3), hitAtK(gold, ids, 5)
+		if hit1 {
 			h1++
 		}
-		if hitAtK(gold, ids, 3) {
+		if hit3 {
 			h3++
 		}
-		if hitAtK(gold, ids, 5) {
+		if hit5 {
 			h5++
 		}
+		// 逐样本明细：仅随响应返回供前端展示对错；eval_runs 仍只落聚合指标。
+		samples = append(samples, map[string]any{
+			"question":          s.Question,
+			"gold_doc_ids":      s.DocIDs,
+			"retrieved_doc_ids": ids,
+			"hit_at_1":          hit1,
+			"hit_at_3":          hit3,
+			"hit_at_5":          hit5,
+		})
 	}
 
 	metrics := map[string]any{
@@ -84,7 +95,7 @@ func (a *API) createCustomerSupportEval(w http.ResponseWriter, r *http.Request) 
 		a.fail(w, r, err)
 		return
 	}
-	WriteJSON(w, http.StatusOK, map[string]any{"run_id": runID, "status": "completed", "metrics": metrics})
+	WriteJSON(w, http.StatusOK, map[string]any{"run_id": runID, "status": "completed", "metrics": metrics, "samples": samples})
 }
 
 // GET /api/evals/{run_id}

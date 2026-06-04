@@ -20,6 +20,17 @@ func (s *Store) CreateDeployment(ctx context.Context, name, version, env, operat
 	})
 }
 
+// CreateDeploymentMeta 触发部署（running）并写入自定义 metadata（A1：含 rollout 目标/镜像/阶段）。返回新 id。
+func (s *Store) CreateDeploymentMeta(ctx context.Context, name, version, env string, meta map[string]any) (string, error) {
+	b, err := json.Marshal(meta)
+	if err != nil {
+		return "", err
+	}
+	return s.q.CreateDeployment(ctx, sqlcgen.CreateDeploymentParams{
+		DeploymentKey: ptr(name), Version: ptr(version), Env: ptr(env), Metadata: b,
+	})
+}
+
 // FinishDeployment 标记成功/失败，返回 deployment_key（供审计）。
 func (s *Store) FinishDeployment(ctx context.Context, id, status string) (string, error) {
 	if err := s.q.FinishDeployment(ctx, sqlcgen.FinishDeploymentParams{Status: status, ID: id}); err != nil {
