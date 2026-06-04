@@ -34,6 +34,18 @@ export type DeploymentMeta = {
   gate?: string;
   owner?: string;
   rollback_of?: string;
+  // A1：真实 K8s rollout 的实时状态（runner 写入 deployments.metadata）。
+  mode?: string; // "k8s_rollout" | undefined（记录态）
+  target_namespace?: string;
+  target_name?: string;
+  previous_image?: string;
+  phase?: string; // queued|patching|progressing|succeeded|rolling_back|rolled_back|failed
+  progress?: number; // ready/desired 百分比
+  ready?: number;
+  desired?: number;
+  updated?: number;
+  message?: string;
+  events?: Array<{ at: string; phase: string; message: string }>;
 };
 
 export type Deployment = {

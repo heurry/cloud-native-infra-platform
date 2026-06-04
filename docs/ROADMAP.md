@@ -18,7 +18,7 @@
 | AI 运维分析 | ✅ 真实 | `ai_handlers.go` Go 聚证据→Python LLM→落库+审计；`/ai/chat:stream` 流式 Copilot | LLM 不可达落 failed 诊断 + 502，降级诚实 |
 | 分层存储 | 🟡 真实但偏静态 | Redis 热缓存 + PG 关系层 + MinIO 对象层(`benchmark_runner.go:239`) + pgvector | 按数据类型分层 + 大产物 offload；**无**自动冷热生命周期迁移 |
 | 元数据管理 | 🟡 浅 | `models.go` 从 `service_instances` 派生 model_id/kind/status | 非独立模型注册中心（无版本/血缘/产物）；前端甚至绕过该端点直读 service-instances |
-| CI/CD 自动化 | 🟠 建模非执行 | `ops_handlers.go:triggerDeployment` 仅写记录 + 审计，`finishDeployment` 改状态 | **不跑真实流水线**：无 build/test、无 kubectl rollout；是部署生命周期记录/回滚状态机 |
+| CI/CD 自动化 | ✅ 真实 rollout（A1 已实现） | 给出 image → `PatchDeploymentImage` + 轮询 `RolloutStatus`（`deploy_runner.go`），成败回写 + 失败自动回滚；未给 image 仍为记录态 | 真改 Deployment 镜像 + 跟踪滚动发布；受 `ALLOW_K8S_WRITES` + 命名空间守卫约束。仍无 build/test 阶段（CD 而非完整 CI） |
 | 弹性扩缩容 | ✅ 可配置（A2 已实现） | 读：`/kubernetes/hpa` HPA spec/status；写：`ScaleDeployment` / `UpsertHPA` / `DeleteHPA`（`client.go`），路由见 `router.go` | 手动扩缩 + 配/删 HPA 真写；受 `ALLOW_K8S_WRITES` + 命名空间允许名单约束，serving 命名空间硬禁 |
 
 **已做未露（后端就绪、前端无消费）**：
@@ -41,19 +41,19 @@
 
 ## Phase A · 让「自动化执行」名副其实
 
-### A1 — CI/CD 从「记录状态机」升级为「真实 rollout 执行器」 【L】
+### A1 — CI/CD 从「记录状态机」升级为「真实 rollout 执行器」 【L】✅ 已实现
 - **目标**：触发部署真的改 minikube 中某 Deployment 的镜像并跟踪滚动发布，失败自动回滚。
-- **做法**：
-  - `server/internal/k8s/client.go` 增写能力：`AppsV1().Deployments(ns).Patch`（strategic-merge 设新 image）。
-  - 改造 `ops_handlers.go:triggerDeployment`：写记录后启 goroutine 调 Patch → 轮询 `Deployment.Status`（observedGeneration / updatedReplicas / availableReplicas / conditions[Progressing]）判定 rollout 成败 → 回写 `finishDeployment`。
-  - 失败路径：Patch 回上一个镜像（记录存 `previous_image`）= 自动回滚，对齐已有 `rollbackDeployment`。
-  - 新增 SSE `/deployments/{id}/events`（复用 `benchmark_runner.go` 的 SSE 模式），前端流式显示进度条。
-  - DB 迁移：deployments 表加 `image / previous_image / started_at / finished_at / progress`。
+- **做法**（已落地）：
+  - `k8s/client.go` 增写能力：`PatchDeploymentImage`（strategic-merge 设新 image，返回旧 image 供回滚）+ `RolloutStatus`（读 observedGeneration / updated / ready / available + Progressing 条件，判定 complete/failed）。
+  - 改造 `ops_handlers.go:triggerDeployment`：**给出 image 即走真实 rollout**——复用 A2 的 `k8sWriteGuard`（feature flag + 命名空间守卫，serving 命名空间硬禁），创建记录后启 goroutine（`deploy_runner.go`）调 Patch → 轮询状态（2s，超时 180s）→ 成功回写 `finishDeployment(success)`。未给 image 时保持既有「记录态」行为（向后兼容）。
+  - 失败/超时路径：Patch 回旧镜像 = 自动回滚，落 `deployment.rollout.failed` + `deployment.rollout.rolledback` 两条审计。
+  - 实时进度写进 `deployments.metadata`（phase/progress/ready/desired + 小事件日志），**无需迁移**——前端轮询既有 `/deployments` 列表即见进度条（`PipelineTableRow` 渲染 `RolloutProgress`，rollout 行隐藏手动 finish/rollback）。
 - **验收**：
-  - [ ] 前端点「触发部署」可见副本逐个 Ready 的实时进度
-  - [ ] 注入坏镜像触发自动回滚 + 两条审计记录
-  - [ ] rollout 状态真实回写到部署记录
-- **风险**：需安全的演示目标 Deployment（勿打 AIBrix 自身），建议部署 `demo-echo` 专供发布演示；写权限需 kubeconfig/RBAC 放开。
+  - [x] 前端「触发真实 rollout」后列表实时显示相位 + ready/desired 进度条
+  - [x] 失败/坏镜像 → 自动回滚到旧镜像 + 两条审计记录（代码路径就绪）
+  - [x] rollout 成败真实回写部署记录（success/failed）
+  - [ ] 真集群端到端联调（需 minikube + 一个 demo Deployment 作目标；ALLOW_K8S_WRITES + 非 serving 命名空间）
+- **风险处置**：默认关写（同 A2）；目标必须是允许名单内、非 serving 的 Deployment（如 `default/demo-echo`）。
 
 ### A2 — 弹性扩缩容从「只读 HPA」升级为「配 HPA + 手动扩缩」 【M】✅ 已实现
 - **目标**：平台能创建/修改/删除 HPA（min/max/目标 CPU 利用率），也能对 Deployment 直接 scale。
@@ -153,9 +153,9 @@
 
 ## 推荐执行顺序
 
-1. **B1 + B2**（纯前端、后端已就绪）→ 立刻补上「做了没露出」，演示面最快变厚。
-2. **A1 + A2**（CI/CD 真执行 + 扩缩容真配）→ 把宣称里最虚的两项做实。需先准备 `demo` workload 当操作对象。
-3. **D1（OTel）**→ 为 C3、E1 喂数据，同时是平台工程硬信号。
+1. ~~**B1 + B2**（纯前端、后端已就绪）→ 立刻补上「做了没露出」，演示面最快变厚。~~ ✅ 已完成
+2. ~~**A1 + A2**（CI/CD 真执行 + 扩缩容真配）→ 把宣称里最虚的两项做实。~~ ✅ 已完成（共用 `k8sWriteGuard` 安全写路径；真集群端到端联调需 demo workload）。
+3. **D1（OTel）**→ 为 C3、E1 喂数据，同时是平台工程硬信号。 ← 下一步
 4. **C1 / C3 / D2 / D3** 按精力推进。
 5. **E 系列**作为 AI 方向纵深加分。
 

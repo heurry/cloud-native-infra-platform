@@ -658,3 +658,42 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ===== A1：真实 rollout 进度（触发抽屉提示 + 行内进度条） ===== */
+.pipeline-rollout-hint {
+  margin: 2px 0 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-foreground, #94a3b8);
+}
+.pipeline-rollout { display: flex; flex-direction: column; gap: 4px; min-width: 0; width: 100%; }
+.pipeline-rollout-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pipeline-rollout-head strong { font-size: 12px; font-weight: 700; }
+.pipeline-rollout-head small { font-size: 11px; color: #64748b; }
+.pipeline-rollout-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: #edf2f7;
+  overflow: hidden;
+}
+.pipeline-rollout-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+  background: #3b82f6;
+}
+.pipeline-rollout-bar i.success { background: #22c55e; }
+.pipeline-rollout-bar i.warning { background: #f59e0b; }
+.pipeline-rollout-bar i.danger { background: #ef4444; }
+.pipeline-rollout-managed {
+  font-size: 11px;
+  font-weight: 600;
+  font-style: normal;
+  color: #2563eb;
+}

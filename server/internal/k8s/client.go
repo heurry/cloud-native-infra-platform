@@ -13,10 +13,12 @@ import (
 	"strings"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -409,6 +411,74 @@ func (c *Collector) DeleteHPA(ctx context.Context, namespace, name string) error
 		return nil
 	}
 	return err
+}
+
+// ---- A1：真实 rollout 执行（改 Deployment 镜像 + 轮询滚动发布状态）。调用方负责守卫。 ----
+
+// PatchDeploymentImage 用 strategic-merge patch 把首个容器镜像改为 image，返回改之前的镜像（供回滚）。
+func (c *Collector) PatchDeploymentImage(ctx context.Context, namespace, name, image string) (string, error) {
+	dep, err := c.clientset.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+	containers := dep.Spec.Template.Spec.Containers
+	if len(containers) == 0 {
+		return "", fmt.Errorf("deployment %s/%s has no containers", namespace, name)
+	}
+	prev := containers[0].Image
+	// 按容器名定位（strategic-merge 对 list 以 name 为 merge key）。
+	patch := fmt.Sprintf(`{"spec":{"template":{"spec":{"containers":[{"name":%q,"image":%q}]}}}}`,
+		containers[0].Name, image)
+	if _, err := c.clientset.AppsV1().Deployments(namespace).Patch(
+		ctx, name, k8stypes.StrategicMergePatchType, []byte(patch), metav1.PatchOptions{}); err != nil {
+		return "", err
+	}
+	return prev, nil
+}
+
+// RolloutSnapshot 概括一次滚动发布的进度（对齐 kubectl rollout status 的判定输入）。
+type RolloutSnapshot struct {
+	Desired   int32
+	Updated   int32
+	Ready     int32
+	Available int32
+	Complete  bool   // 已全量就绪且 observedGeneration 追平
+	Failed    bool   // Progressing 条件为 ProgressDeadlineExceeded
+	Reason    string // Progressing 条件 reason
+	Message   string // Progressing 条件 message
+}
+
+// RolloutStatus 读取 Deployment 当前滚动发布状态。
+func (c *Collector) RolloutStatus(ctx context.Context, namespace, name string) (RolloutSnapshot, error) {
+	dep, err := c.clientset.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return RolloutSnapshot{}, err
+	}
+	desired := int32(1)
+	if dep.Spec.Replicas != nil {
+		desired = *dep.Spec.Replicas
+	}
+	s := RolloutSnapshot{
+		Desired:   desired,
+		Updated:   dep.Status.UpdatedReplicas,
+		Ready:     dep.Status.ReadyReplicas,
+		Available: dep.Status.AvailableReplicas,
+	}
+	for _, cond := range dep.Status.Conditions {
+		if cond.Type == appsv1.DeploymentProgressing {
+			s.Reason = cond.Reason
+			s.Message = cond.Message
+			if cond.Reason == "ProgressDeadlineExceeded" {
+				s.Failed = true
+			}
+		}
+	}
+	// kubectl rollout status 判定：观测代追平 + 新副本全部 updated/ready/available。
+	if dep.Status.ObservedGeneration >= dep.Generation &&
+		s.Updated == desired && s.Ready == desired && s.Available == desired {
+		s.Complete = true
+	}
+	return s, nil
 }
 
 // hpaMetric 把首个 metric 的目标与当前值格式化为 "cpu 45%/70%"（当前未知时 <unknown>）。
