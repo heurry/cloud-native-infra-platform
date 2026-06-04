@@ -20,9 +20,12 @@ from aiservice.diagnose import run_diagnose
 from aiservice.embed import embed_texts
 from aiservice.llm import sse_event, stream_chat_completion
 from aiservice.schemas import ChatRequest, DiagnoseRequest, DiagnoseResponse, EmbedRequest, EmbedResponse
+from aiservice.telemetry import setup_telemetry
 
 cfg = load_config()
 app = FastAPI(title="CloudNative Infra Platform AI Service", version=__version__)
+# D1：全链路 trace（env-gated）。延续 Go 控制面的 traceparent，并向上游 vLLM 继续传播。
+setup_telemetry(app)
 
 
 @app.get("/internal/health")

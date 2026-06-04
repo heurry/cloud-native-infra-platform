@@ -1,0 +1,14 @@
+# D1：Prometheus —— 抓取 go-control-plane 的 /metrics（HTTP 请求计数/时延直方图）。
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: go-control-plane
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["go-server:8081"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

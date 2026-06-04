@@ -81,6 +81,10 @@ services:
       S3_ACCESS_KEY: minioadmin
       S3_SECRET_KEY: minioadmin
       S3_BUCKET: infra-artifacts
+      # D1：全链路 trace 导出。默认空=关（/metrics 始终开）；启用方式见下方 observability profile。
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
+      OTEL_SERVICE_NAME: go-control-plane
     ports:
       - "8081:8081"
     extra_hosts:
@@ -110,6 +114,9 @@ services:
       AI_STUB_MODE: auto
       AI_LLM_BASE_URL: http://host.docker.internal:8010/v1
       AI_LLM_MODEL: qwen3-4b-customer
+      # D1：延续 Go 控制面的 traceparent 并向 vLLM 继续传播（默认空=关）。
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_SERVICE_NAME: ai-service
     ports:
       - "8200:8200"
     extra_hosts:
@@ -143,6 +150,46 @@ services:
       - /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:/nvidia/lib/libnvidia-ml.so.1:ro
     privileged: true
 
+  # ===== D1：全链路可观测栈（profile=observability，按需启用，不影响默认 up）=====
+  # 启用：
+  #   export OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
+  #   docker compose -f deploy/compose/docker-compose.yml --profile observability up -d
+  # 然后开 Grafana http://localhost:3000（admin/admin）→ Control Plane 看板 / Explore→Tempo 看 trace 瀑布。
+  tempo:
+    image: grafana/tempo:2.6.1
+    profiles: ["observability"]
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./observability/tempo.yaml:/etc/tempo.yaml:ro
+      - tempodata:/var/tempo
+    ports:
+      - "3200:3200" # Tempo API（Grafana 数据源）
+      - "4318:4318" # OTLP/HTTP 接收（go-server / ai-service 导出至此）
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    profiles: ["observability"]
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.2.2
+    profiles: ["observability"]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - tempo
+
 networks:
   default:
   # minikube 创建的外部网络；go-server 接入它以直达集群 API。
@@ -153,3 +200,4 @@ networks:
 volumes:
   pgdata:
   miniodata:
+  tempodata:

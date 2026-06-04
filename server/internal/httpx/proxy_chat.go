@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // 6A：proxy 组绞杀——Go 原生 POST /api/proxy/{endpoint_id}/v1/chat/completions。
@@ -130,8 +131,9 @@ func (a *API) proxyChatCompletions(w http.ResponseWriter, r *http.Request) {
 }
 
 // proxyHTTPClient 无整体 Timeout（SSE 流式需要）；连接级超时交给 Transport 默认值与请求 context。
+// D1：otelhttp 包裹传输，把 traceparent 注入到 Go→vLLM/AIBrix 的上游调用（未配 OTLP 时 no-op）。
 var proxyHTTPClient = &http.Client{
-	Transport: &http.Transport{ResponseHeaderTimeout: 60 * time.Second},
+	Transport: otelhttp.NewTransport(&http.Transport{ResponseHeaderTimeout: 60 * time.Second}),
 }
 
 // resolveEndpoint 解析 endpoint_id → 反代目标（含 auto_router / round_robin 选路）。

@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // Proxy 是面向 Python 服务的反向代理，专为 SSE 流式透传调优：
@@ -37,6 +39,8 @@ func NewProxy(base string) (*Proxy, error) {
 			}
 		},
 		FlushInterval: -1, // SSE：禁用缓冲，逐块 flush
+		// D1：otelhttp 传输从 pr.Out.Context() 的活跃 span 注入 traceparent，串起 Go→Python（chat:stream）链路。
+		Transport: otelhttp.NewTransport(http.DefaultTransport),
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			slog.Error("proxy upstream error", "path", r.URL.Path, "err", err,
 				"request_id", RequestIDFrom(r.Context()))
