@@ -147,10 +147,15 @@
 - **验收**：
   - [ ] 不同角色可见/可做范围不同，审计含真实用户
 
-### D3 — 平台自托管（Helm/Kustomize 上 K8s） 【M-L】
-- **做法**：为 go-server / ai-service / web 写 Helm chart，部署进 minikube，与 serving 栈同集群；配合 A1 平台甚至能发布自己。docker-compose 退为本地开发态。
+### D3 — 平台自托管（Helm/Kustomize 上 K8s） 【M-L】✅ 已实现
+- **做法**（已落地，补全既有 chart 为可自托管的完整栈）：
+  - **新增 web 镜像**：`apps/web/Dockerfile`（多阶段 Node 构建 → nginx）+ `nginx.conf`——nginx 提供 SPA 静态资源 + 反代 `/api` → go-server（同源，前端 `VITE_API_BASE` 留空）；`/api` 上游经 `GO_SERVER_UPSTREAM` 由 helm 注入（`NGINX_ENVSUBST_FILTER` 限定只替换该变量，保留 nginx 自身 `$host/$uri`）。SSE 关缓冲。`release.yml` 镜像矩阵加 web。
+  - **chart 补全**（`deploy/helm/cloudnative-infra-platform`）：新增 `web` Deployment/Service 模板；go-server values 补齐新配置（`ALLOW_K8S_WRITES`/`K8S_WRITE_NAMESPACES`/`OTEL_*`/`STORAGE_ARCHIVE_ENABLED`，均安全默认）；新增可选 `ingress`（/api→go-server、/→web）。Chart 升 0.2.0。
+  - 已有 postgres/redis/minio/rbac/agent 模板沿用；go-server 多副本无状态。
 - **验收**：
-  - [ ] `helm install` 一键起平台
+  - [x] `helm lint` + `helm template` 通过（6 Deployments / 8 Services，ingress 默认关）；新配置/web 渲染正确
+  - [x] web 镜像实建通过：nginx envsubst 把 `${GO_SERVER_UPSTREAM}` 替成 `proxy_pass http://...go-server:8081`，`nginx -t` 语法 OK，nginx 自身 `$host` 保留
+  - [ ] `helm install` 进 minikube 端到端起平台（需集群 + 把镜像 load 进集群）
 
 ### D4 — 工程质量：e2e + 负载 + 混沌 【M】
 - **做法**：补 API e2e（起真实依赖的集成测试）、关键路径负载基线、混沌实验（杀 Redis/MinIO/AI 验证降级——代码已支持降级，需测试固化）；CI 跑全套。

@@ -2,10 +2,10 @@ apiVersion: v2
 name: cloudnative-infra-platform
 description: >-
   CloudNative Infra Platform — Go control plane (client-go 直读集群 + 服务注册 + 指标/告警)
-  + Python AI service + legacy API + node agent。Phase 5 / 5B.5 交付。
+  + Python AI service + 前端 web（nginx 反代 /api）+ node agent。D3：平台自托管。
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 0.2.0
+appVersion: "0.2.0"
 keywords:
   - kubernetes
   - control-plane
