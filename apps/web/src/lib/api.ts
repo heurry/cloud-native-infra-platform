@@ -10,6 +10,7 @@
 import type { K8sHPA, ScaleDeploymentInput, UpsertHpaInput } from "../types/platform";
 import type { ModelRegistryList, RegisterModelInput, RegisteredModelVersion } from "../types/registry";
 import type { ArchiveManifest, ArchiveRunResult, StorageTiers } from "../types/storage";
+import type { CallGraph } from "../types/topology";
 
 const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -149,6 +150,11 @@ export function runArchive(): Promise<{ results: ArchiveRunResult[] }> {
 }
 export function archiveDownloadURL(id: string): Promise<{ key: string; download_url?: string; note?: string }> {
   return api(`/api/storage/archives/${encodeURIComponent(id)}`);
+}
+
+// ===== C3：真实服务拓扑（trace 派生的调用图） =====
+export function topologyGraph(): Promise<CallGraph> {
+  return api<CallGraph>("/api/topology/graph");
 }
 
 export function registerModelVersion(input: RegisterModelInput): Promise<{ id: string; model_id: string; version: string }> {

@@ -48,29 +48,19 @@ func init() {
 	prometheus.MustRegister(httpReqs, httpDur)
 }
 
-// Init 设置全局 propagator，并在配置了 OTLP endpoint 时建立 TracerProvider（OTLP/HTTP 批量导出）。
-// 返回 shutdown（flush 在途 span）；未配置 endpoint 时返回 no-op shutdown，绝不阻塞/失败启动。
+// defaultGraph 是进程内调用图聚合器（C3）。Init 安装；Graph() 供 handler 读取快照。
+var defaultGraph *ServiceGraph
+
+// Graph 返回调用图聚合器（Init 前为 nil）。
+func Graph() *ServiceGraph { return defaultGraph }
+
+// Init 设置全局 propagator + TracerProvider。TracerProvider 始终安装（含 C3 调用图 SpanProcessor，
+// 故调用图不依赖 OTLP 导出）；仅当配置了 OTLP endpoint 时额外挂 OTLP/HTTP 批量导出。
+// 返回 shutdown（flush 在途 span）；OTLP 构建失败时降级为「仅本地调用图」，绝不阻塞启动。
 func Init(ctx context.Context, cfg Config) (func(context.Context) error, error) {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{}, propagation.Baggage{}))
 
-	if cfg.OTLPEndpoint == "" {
-		return func(context.Context) error { return nil }, nil
-	}
-
-	var opts []otlptracehttp.Option
-	if strings.Contains(cfg.OTLPEndpoint, "://") {
-		opts = append(opts, otlptracehttp.WithEndpointURL(cfg.OTLPEndpoint))
-	} else {
-		opts = append(opts, otlptracehttp.WithEndpoint(cfg.OTLPEndpoint))
-		if cfg.OTLPInsecure {
-			opts = append(opts, otlptracehttp.WithInsecure())
-		}
-	}
-	exp, err := otlptracehttp.New(ctx, opts...)
-	if err != nil {
-		return nil, err
-	}
 	res, err := resource.Merge(resource.Default(), resource.NewWithAttributes(
 		semconv.SchemaURL,
 		semconv.ServiceName(cfg.ServiceName),
@@ -79,12 +69,34 @@ func Init(ctx context.Context, cfg Config) (func(context.Context) error, error) 
 	if err != nil {
 		res = resource.Default()
 	}
-	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exp),
+
+	defaultGraph = newServiceGraph(cfg.ServiceName)
+	opts := []sdktrace.TracerProviderOption{
 		sdktrace.WithResource(res),
-	)
+		sdktrace.WithSpanProcessor(defaultGraph),
+	}
+
+	var initErr error
+	if cfg.OTLPEndpoint != "" {
+		var expOpts []otlptracehttp.Option
+		if strings.Contains(cfg.OTLPEndpoint, "://") {
+			expOpts = append(expOpts, otlptracehttp.WithEndpointURL(cfg.OTLPEndpoint))
+		} else {
+			expOpts = append(expOpts, otlptracehttp.WithEndpoint(cfg.OTLPEndpoint))
+			if cfg.OTLPInsecure {
+				expOpts = append(expOpts, otlptracehttp.WithInsecure())
+			}
+		}
+		if exp, err := otlptracehttp.New(ctx, expOpts...); err != nil {
+			initErr = err // 导出器建失败：仍保留本地调用图，仅不导出。
+		} else {
+			opts = append(opts, sdktrace.WithBatcher(exp))
+		}
+	}
+
+	tp := sdktrace.NewTracerProvider(opts...)
 	otel.SetTracerProvider(tp)
-	return tp.Shutdown, nil
+	return tp.Shutdown, initErr
 }
 
 // MetricsHandler 暴露 Prometheus 抓取端点（挂到根 /metrics）。
