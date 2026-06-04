@@ -1,0 +1,59 @@
+{{- if .Values.web.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cip.fullname" . }}-web
+  labels:
+    {{- include "cip.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.web.service.port }}
+      targetPort: 80
+      name: http
+  selector:
+    {{- include "cip.selectorLabels" (dict "root" . "component" "web") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cip.fullname" . }}-web
+  labels:
+    {{- include "cip.labels" . | nindent 4 }}
+spec:
+  # 无状态静态资源 + 反代，可多副本。
+  replicas: {{ .Values.web.replicas }}
+  selector:
+    matchLabels:
+      {{- include "cip.selectorLabels" (dict "root" . "component" "web") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cip.selectorLabels" (dict "root" . "component" "web") | nindent 8 }}
+    spec:
+      containers:
+        - name: web
+          image: "{{ .Values.web.image.repository }}:{{ .Values.web.image.tag }}"
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - containerPort: 80
+              name: http
+          env:
+            # nginx 反代 /api 的上游 = go-server service（envsubst 注入到 nginx 配置）。
+            - name: GO_SERVER_UPSTREAM
+              value: "{{ include "cip.fullname" . }}-go-server:{{ .Values.goServer.service.port }}"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.web.resources | nindent 12 }}
+{{- end }}

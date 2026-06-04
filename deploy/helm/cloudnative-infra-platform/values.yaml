@@ -26,6 +26,35 @@ goServer:
     REGISTRY_TTL_SECONDS: "30"
     REGISTRY_SWEEP_SECONDS: "15"
     CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173"
+    # A2/A1：K8s 写权限（默认关，serving 命名空间硬禁）。
+    ALLOW_K8S_WRITES: "false"
+    K8S_WRITE_NAMESPACES: "default"
+    # D1：全链路 trace（默认空=不导出；指向集群内 OTLP collector 即开启）。
+    OTEL_EXPORTER_OTLP_ENDPOINT: ""
+    OTEL_SERVICE_NAME: "go-control-plane"
+    # C2：分层存储周期自动归档（默认关；手动 POST /api/storage/archive 始终可用）。
+    STORAGE_ARCHIVE_ENABLED: "false"
+
+# 前端（Vite SPA）。nginx 提供静态资源 + 反代 /api → go-server（同源）。
+web:
+  enabled: true
+  replicas: 1
+  image:
+    repository: cloudnative-infra-platform/web
+    tag: latest
+  service:
+    port: 80
+  resources:
+    requests: { cpu: 25m, memory: 32Mi }
+    limits: { cpu: 250m, memory: 128Mi }
+
+# 对外暴露（可选）。启用需集群装 ingress controller（minikube：addons enable ingress）。
+# 关闭时用 `kubectl port-forward svc/<release>-web 8080:80` 访问。
+ingress:
+  enabled: false
+  className: ""
+  host: cip.local
+  annotations: {}
 
 aiService:
   replicas: 1

@@ -1,0 +1,35 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "cip.fullname" . }}
+  labels:
+    {{- include "cip.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          # /api 直达 go-server；其余交给 web（web nginx 也会反代 /api，双保险）。
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "cip.fullname" . }}-go-server
+                port:
+                  number: {{ .Values.goServer.service.port }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "cip.fullname" . }}-web
+                port:
+                  number: {{ .Values.web.service.port }}
+{{- end }}
