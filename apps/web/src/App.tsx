@@ -17,6 +17,7 @@ import { RetrievalEvalPage } from "./pages/RetrievalEvalPage";
 import { ObservabilityPage } from "./pages/ObservabilityPage";
 import { PipelinesPage } from "./pages/PipelinesPage";
 import { ModelsPage } from "./pages/ModelsPage";
+import { StoragePage } from "./pages/StoragePage";
 import { PlatformOverviewPage } from "./pages/PlatformOverviewPage";
 import { ServicesPage } from "./pages/ServicesPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -89,6 +90,9 @@ export function App() {
         </PageCacheSlot>
         <PageCacheSlot active={page === "models"} mounted={visitedPages.includes("models")}>
           <ModelsPage />
+        </PageCacheSlot>
+        <PageCacheSlot active={page === "storage"} mounted={visitedPages.includes("storage")}>
+          <StoragePage />
         </PageCacheSlot>
         <PageCacheSlot active={page === "settings"} mounted={visitedPages.includes("settings")}>
           <SettingsPage />

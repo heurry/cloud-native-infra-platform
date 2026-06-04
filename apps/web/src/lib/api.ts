@@ -9,6 +9,7 @@
 
 import type { K8sHPA, ScaleDeploymentInput, UpsertHpaInput } from "../types/platform";
 import type { ModelRegistryList, RegisterModelInput, RegisteredModelVersion } from "../types/registry";
+import type { ArchiveManifest, ArchiveRunResult, StorageTiers } from "../types/storage";
 import type { CallGraph } from "../types/topology";
 
 const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
@@ -135,6 +136,20 @@ export async function deleteK8sHpa(namespace: string, name: string): Promise<voi
 
 export function listModelRegistry(): Promise<ModelRegistryList> {
   return api<ModelRegistryList>("/api/models/registry");
+}
+
+// ===== C2：分层存储生命周期 =====
+export function storageTiers(): Promise<StorageTiers> {
+  return api<StorageTiers>("/api/storage/tiers");
+}
+export function listArchives(limit = 50): Promise<{ archives: ArchiveManifest[] }> {
+  return api<{ archives: ArchiveManifest[] }>(`/api/storage/archives?limit=${limit}`);
+}
+export function runArchive(): Promise<{ results: ArchiveRunResult[] }> {
+  return api("/api/storage/archive", { method: "POST", body: JSON.stringify({}) });
+}
+export function archiveDownloadURL(id: string): Promise<{ key: string; download_url?: string; note?: string }> {
+  return api(`/api/storage/archives/${encodeURIComponent(id)}`);
 }
 
 // ===== C3：真实服务拓扑（trace 派生的调用图） =====

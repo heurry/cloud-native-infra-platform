@@ -103,7 +103,7 @@ func main() {
 
 	// 4) HTTP。
 	st := store.New(pool)
-	router := httpx.NewRouter(&httpx.API{
+	apiSvc := &httpx.API{
 		Pool:           pool,
 		Agent:          agentcli.New(cfg.AgentBaseURL),
 		Metrics:        metrics.NewService(pool),
@@ -123,7 +123,9 @@ func main() {
 		RateLimitRPS:   cfg.RateLimitRPS,
 		RateLimitBurst: cfg.RateLimitBurst,
 		Blob:           blobStore,
-	})
+		StorageArchiveEnabled: cfg.StorageArchiveEnabled,
+	}
+	router := httpx.NewRouter(apiSvc)
 
 	// 4.5) 后台任务（随关机一并停止）：服务注册表 reaper（5B.2）+ vLLM 指标抓取（Option A）。
 	bgCtx, bgCancel := context.WithCancel(context.Background())
@@ -131,6 +133,11 @@ func main() {
 	go runRegistryReaper(bgCtx, st, cfg.RegistrySweep, cfg.RegistryTTL.Seconds())
 	if servingScraper != nil {
 		go runServingScraper(bgCtx, servingScraper, cfg.ServingScrape)
+	}
+	// C2：周期自动归档（opt-in；手动 POST /api/storage/archive 始终可用）。
+	if cfg.StorageArchiveEnabled {
+		slog.Info("storage archiver enabled", "sweep", cfg.ArchiveSweep)
+		go apiSvc.RunArchiveLoop(bgCtx, cfg.ArchiveSweep)
 	}
 	srv := &http.Server{
 		Addr:              cfg.Addr,

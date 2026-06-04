@@ -100,6 +100,12 @@ func NewRouter(a *API) *chi.Mux {
 
 		r.Get("/audit/events", a.auditEvents)
 
+		// C2：分层存储生命周期（各层占用 + 归档清单 + 手动归档）。
+		r.Get("/storage/tiers", a.storageTiers)
+		r.Get("/storage/archives", a.listArchives)
+		r.Get("/storage/archives/{id}", a.getArchive)
+		r.Post("/storage/archive", a.runArchive)
+
 		// 6A：models / proxy / benchmarks 组 Go 原生（取代 legacy 反代）。
 		r.Get("/models", a.models)
 		// C1：独立模型注册中心（版本化 + 血缘 + 产物 + 运行时绑定）。
