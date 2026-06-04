@@ -253,6 +253,173 @@ export async function streamAIChat(
   }
 }
 
+// ===== SSE 流式客服 RAG 对话（/api/chat/sessions/{id}/messages:stream） =====
+//
+// Go 原生 RAG 管线逐事件推送（`event: <name>\ndata: <json>\n\n`）：
+// retrieval{documents,query,retrieval_ms,memory_turns,request_id} / route{...}
+// / token{text} / fallback{reason,error?} / citation{doc_ids} / metrics{ttft_ms,total_ms,target_pod,...} / done{}。
+// 会话不存在 / content 为空时后端返回非 SSE 错误信封，这里解析后回调 onError。
+
+export interface ChatCitation {
+  doc_id: string;
+  title?: string;
+  category?: string;
+  version?: string;
+  score?: number;
+}
+
+export interface ChatSessionMetrics {
+  request_id?: string;
+  retrieval_ms?: number | null;
+  ttft_ms?: number | null;
+  generation_ms?: number | null;
+  total_ms?: number | null;
+  target_pod?: string;
+  fallback_reason?: string;
+  status?: string;
+  error?: string;
+}
+
+export interface ChatSessionStreamHandlers {
+  onRetrieval?: (docs: ChatCitation[], info: { query?: string; retrievalMs?: number; memoryTurns?: number; requestId?: string }) => void;
+  onRoute?: (info: { endpointId?: string; selectedEndpointId?: string; routingStrategy?: string }) => void;
+  onToken: (text: string) => void;
+  onFallback?: (reason: string, error?: string) => void;
+  onMetrics?: (metrics: ChatSessionMetrics) => void;
+  onError?: (message: string) => void;
+  onDone?: () => void;
+}
+
+export interface ChatSessionStreamOptions {
+  signal?: AbortSignal;
+  endpointId?: string;
+  maxTokens?: number;
+  temperature?: number;
+}
+
+export async function streamChatSession(
+  sessionId: string,
+  content: string,
+  handlers: ChatSessionStreamHandlers,
+  options?: ChatSessionStreamOptions
+): Promise<void> {
+  const requestId = makeRequestId();
+  const url = `${API_BASE}/api/chat/sessions/${encodeURIComponent(sessionId)}/messages:stream`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      signal: options?.signal,
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream", "x-request-id": requestId },
+      body: JSON.stringify({
+        content,
+        endpoint_id: options?.endpointId ?? "",
+        max_tokens: options?.maxTokens ?? 1024,
+        ...(options?.temperature != null ? { temperature: options.temperature } : {})
+      })
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") return;
+    handlers.onError?.(error instanceof Error ? error.message : "网络请求失败");
+    handlers.onDone?.();
+    return;
+  }
+
+  if (response.status === 401) unauthorizedHandler?.();
+
+  if (!response.ok || !response.body) {
+    const body = await response.text().catch(() => "");
+    let message = body || response.statusText || `请求失败（${response.status}）`;
+    try {
+      const parsed = JSON.parse(body) as { error?: { message?: string }; message?: string };
+      message = parsed?.error?.message || parsed?.message || message;
+    } catch {
+      /* 非 JSON：保留原文 */
+    }
+    handlers.onError?.(message);
+    handlers.onDone?.();
+    return;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finished = false;
+
+  try {
+    while (!finished) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let sep: number;
+      while ((sep = buffer.indexOf("\n\n")) !== -1) {
+        const block = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        const { event, data } = parseSSEBlock(block);
+        if (!event) continue;
+        const obj = (data ?? {}) as Record<string, unknown>;
+        switch (event) {
+          case "retrieval":
+            handlers.onRetrieval?.(Array.isArray(obj.documents) ? (obj.documents as ChatCitation[]) : [], {
+              query: asStr(obj.query),
+              retrievalMs: asNum(obj.retrieval_ms),
+              memoryTurns: asNum(obj.memory_turns),
+              requestId: asStr(obj.request_id)
+            });
+            break;
+          case "route":
+            handlers.onRoute?.({
+              endpointId: asStr(obj.endpoint_id),
+              selectedEndpointId: asStr(obj.selected_endpoint_id),
+              routingStrategy: asStr(obj.routing_strategy)
+            });
+            break;
+          case "token": {
+            const text = obj.text;
+            if (typeof text === "string") handlers.onToken(text);
+            break;
+          }
+          case "fallback":
+            handlers.onFallback?.(asStr(obj.reason) ?? "fallback", asStr(obj.error));
+            break;
+          case "metrics":
+            handlers.onMetrics?.(obj as ChatSessionMetrics);
+            break;
+          case "citation":
+            /* doc_ids 已随 retrieval/metrics 提供，这里忽略以保持事件兼容 */
+            break;
+          case "error":
+            handlers.onError?.(asStr(obj.error) ?? "对话服务错误");
+            break;
+          case "done":
+            finished = true;
+            break;
+        }
+      }
+    }
+  } catch (error) {
+    if (!(error instanceof DOMException && error.name === "AbortError")) {
+      handlers.onError?.(error instanceof Error ? error.message : "流式连接中断");
+    }
+  } finally {
+    handlers.onDone?.();
+    try {
+      reader.releaseLock();
+    } catch {
+      /* 已释放 */
+    }
+  }
+}
+
+function asStr(v: unknown): string | undefined {
+  return typeof v === "string" ? v : undefined;
+}
+function asNum(v: unknown): number | undefined {
+  return typeof v === "number" ? v : undefined;
+}
+
 function parseSSEBlock(block: string): { event: string; data: unknown } {
   let event = "";
   const dataLines: string[] = [];

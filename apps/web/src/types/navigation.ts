@@ -5,6 +5,7 @@ export type Page =
   | "observability"
   | "aiOps"
   | "knowledge"
+  | "support"
   | "benchmarks"
   | "config"
   | "pipelines"
@@ -18,6 +19,7 @@ export const pages: Page[] = [
   "observability",
   "aiOps",
   "knowledge",
+  "support",
   "benchmarks",
   "config",
   "pipelines",
@@ -34,6 +36,7 @@ export const pageLabels: Record<Page, string> = {
   observability: "可观测性",
   aiOps: "AI Ops",
   knowledge: "知识库 / RAG",
+  support: "智能客服",
   benchmarks: "压测验证",
   models: "模型注册",
   settings: "平台设置"
@@ -50,6 +53,7 @@ export const pagePaths: Record<Page, string> = {
   observability: "/observability",
   aiOps: "/ai-ops",
   knowledge: "/knowledge",
+  support: "/support",
   benchmarks: "/benchmarks",
   models: "/models",
   settings: "/settings"

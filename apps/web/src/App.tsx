@@ -12,6 +12,7 @@ import { BenchmarksPage } from "./pages/BenchmarksPage";
 import { KubernetesPage } from "./pages/KubernetesPage";
 import { ConfigCenterPage } from "./pages/ConfigCenterPage";
 import { KnowledgePage } from "./pages/KnowledgePage";
+import { CustomerSupportPage } from "./pages/CustomerSupportPage";
 import { ObservabilityPage } from "./pages/ObservabilityPage";
 import { PipelinesPage } from "./pages/PipelinesPage";
 import { ModelsPage } from "./pages/ModelsPage";
@@ -76,6 +77,9 @@ export function App() {
         <PageCacheSlot active={page === "knowledge"} mounted={visitedPages.includes("knowledge")}>
           <KnowledgePage />
         </PageCacheSlot>
+        <PageCacheSlot active={page === "support"} mounted={visitedPages.includes("support")}>
+          <CustomerSupportPage />
+        </PageCacheSlot>
         <PageCacheSlot active={page === "benchmarks"} mounted={visitedPages.includes("benchmarks")}>
           <BenchmarksPage />
         </PageCacheSlot>
@@ -89,7 +93,7 @@ export function App() {
       {/* Keep AI Ops Copilot mounted so chat history survives page changes; toggle via CSS. */}
       <AIOpsCopilotPanel hidden={page !== "aiOps"} setPage={setPage} />
       {page === "settings" && <SettingsStatusPanel />}
-      {page !== "aiOps" && page !== "settings" && <AICopilotPanel page={page} setPage={setPage} />}
+      {page !== "aiOps" && page !== "settings" && page !== "support" && <AICopilotPanel page={page} setPage={setPage} />}
     </div>
   );
 }
