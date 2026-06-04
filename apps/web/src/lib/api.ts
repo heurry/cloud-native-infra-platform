@@ -35,6 +35,23 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
   unauthorizedHandler = handler;
 }
 
+// D2：JWT 令牌（认证开启时由登录写入；持久化到 localStorage，刷新不丢）。
+const AUTH_TOKEN_KEY = "cip_auth_token";
+let authToken: string | null = typeof localStorage !== "undefined" ? localStorage.getItem(AUTH_TOKEN_KEY) : null;
+export function setAuthToken(token: string | null): void {
+  authToken = token;
+  if (typeof localStorage !== "undefined") {
+    if (token) localStorage.setItem(AUTH_TOKEN_KEY, token);
+    else localStorage.removeItem(AUTH_TOKEN_KEY);
+  }
+}
+export function getAuthToken(): string | null {
+  return authToken;
+}
+function authHeaders(): Record<string, string> {
+  return authToken ? { Authorization: `Bearer ${authToken}` } : {};
+}
+
 function makeRequestId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
@@ -68,6 +85,7 @@ export async function api<T>(path: string, init?: ApiOptions): Promise<T> {
       headers: {
         "Content-Type": "application/json",
         "x-request-id": requestId,
+        ...authHeaders(),
         ...(init?.headers ?? {})
       }
     });
@@ -181,7 +199,7 @@ export async function uploadModelArtifact(id: string, file: File): Promise<{ art
   const res = await fetch(`${API_BASE}/api/models/registry/${encodeURIComponent(id)}/artifact`, {
     method: "POST",
     body: fd,
-    headers: { "x-request-id": requestId }
+    headers: { "x-request-id": requestId, ...authHeaders() }
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
@@ -235,7 +253,8 @@ export async function streamAIChat(
       headers: {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
-        "x-request-id": requestId
+        "x-request-id": requestId,
+        ...authHeaders()
       },
       body: JSON.stringify({
         messages,
@@ -376,7 +395,7 @@ export async function streamChatSession(
     response = await fetch(url, {
       method: "POST",
       signal: options?.signal,
-      headers: { "Content-Type": "application/json", Accept: "text/event-stream", "x-request-id": requestId },
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream", "x-request-id": requestId, ...authHeaders() },
       body: JSON.stringify({
         content,
         endpoint_id: options?.endpointId ?? "",

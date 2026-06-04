@@ -42,6 +42,11 @@ type Config struct {
 	// C2：分层存储生命周期（PG 过期数据 → MinIO 归档）。
 	StorageArchiveEnabled bool          // 是否开启「周期自动归档」（默认关；手动触发端点始终可用）
 	ArchiveSweep          time.Duration // 自动归档扫描周期
+	// D2：认证授权 / RBAC（默认关——现有开放演示不受影响；开启后读需登录态、写需 operator+）。
+	AuthEnabled  bool          // 总开关
+	AuthJWTSecret string       // HS256 签名密钥
+	AuthTokenTTL time.Duration // 令牌有效期
+	AuthUsers    string        // "user:pass:role,..."（空=默认 admin/operator/viewer 演示账户）
 }
 
 func Load() Config {
@@ -76,6 +81,10 @@ func Load() Config {
 		OTelService:      env("OTEL_SERVICE_NAME", "go-control-plane"),
 		StorageArchiveEnabled: envBool("STORAGE_ARCHIVE_ENABLED", false),
 		ArchiveSweep:          envSeconds("ARCHIVE_SWEEP_SECONDS", time.Hour),
+		AuthEnabled:   envBool("AUTH_ENABLED", false),
+		AuthJWTSecret: env("AUTH_JWT_SECRET", "dev-insecure-change-me"),
+		AuthTokenTTL:  envSeconds("AUTH_TOKEN_TTL_SECONDS", 12*time.Hour),
+		AuthUsers:     env("AUTH_USERS", ""),
 	}
 }
 

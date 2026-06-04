@@ -75,7 +75,7 @@ func (a *API) createConfigItem(w http.ResponseWriter, r *http.Request) {
 		a.badRequest(w, r, "config_key required")
 		return
 	}
-	operator := orDefault(req.Operator, defaultOperator)
+	operator := a.actor(r, req.Operator)
 	env := orDefault(req.Env, "dev")
 	ns := orDefault(req.Namespace, "default")
 	id, err := a.Store.CreateConfigItem(r.Context(), env, ns, req.ConfigKey,
@@ -102,7 +102,7 @@ func (a *API) publishConfigVersion(w http.ResponseWriter, r *http.Request) {
 		a.badRequest(w, r, "invalid body")
 		return
 	}
-	operator := orDefault(req.Operator, defaultOperator)
+	operator := a.actor(r, req.Operator)
 	reason := orDefault(req.ChangeReason, "更新配置")
 	next, configKey, err := a.Store.PublishConfigVersion(r.Context(), id, req.Content, reason, operator)
 	if err != nil {
@@ -126,7 +126,7 @@ func (a *API) rollbackConfigVersion(w http.ResponseWriter, r *http.Request) {
 		a.badRequest(w, r, "invalid body")
 		return
 	}
-	operator := orDefault(req.Operator, defaultOperator)
+	operator := a.actor(r, req.Operator)
 	configKey, err := a.Store.RollbackConfigVersion(r.Context(), id, req.Version, operator)
 	if err != nil {
 		if errors.Is(err, store.ErrVersionNotFound) {
@@ -171,7 +171,7 @@ func (a *API) triggerDeployment(w http.ResponseWriter, r *http.Request) {
 		a.badRequest(w, r, "name required")
 		return
 	}
-	operator := orDefault(req.Operator, defaultOperator)
+	operator := a.actor(r, req.Operator)
 	version := orDefault(req.Version, "latest")
 	env := orDefault(req.Env, "dev")
 
@@ -225,7 +225,7 @@ func (a *API) finishDeployment(w http.ResponseWriter, r *http.Request) {
 		a.badRequest(w, r, "status must be success|failed")
 		return
 	}
-	operator := orDefault(req.Operator, defaultOperator)
+	operator := a.actor(r, req.Operator)
 	key, err := a.Store.FinishDeployment(r.Context(), id, status)
 	if err != nil {
 		a.fail(w, r, err)
@@ -245,7 +245,7 @@ func (a *API) rollbackDeployment(w http.ResponseWriter, r *http.Request) {
 		a.badRequest(w, r, "invalid body")
 		return
 	}
-	operator := orDefault(req.Operator, defaultOperator)
+	operator := a.actor(r, req.Operator)
 	newID, key, err := a.Store.RollbackDeployment(r.Context(), id, operator)
 	if err != nil {
 		a.fail(w, r, err)
@@ -297,7 +297,7 @@ func (a *API) createIncident(w http.ResponseWriter, r *http.Request) {
 		a.badRequest(w, r, "title required")
 		return
 	}
-	operator := orDefault(req.Operator, defaultOperator)
+	operator := a.actor(r, req.Operator)
 	severity := orDefault(req.Severity, "info")
 	id, err := a.Store.CreateIncident(r.Context(), req.Title, severity, req.Summary)
 	if err != nil {
@@ -330,7 +330,7 @@ func (a *API) incidentTransition(
 		a.badRequest(w, r, "invalid body")
 		return
 	}
-	operator := orDefault(req.Operator, defaultOperator)
+	operator := a.actor(r, req.Operator)
 	if err := mutate(r.Context(), id, operator); err != nil {
 		a.fail(w, r, err)
 		return

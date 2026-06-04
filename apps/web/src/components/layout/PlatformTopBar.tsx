@@ -5,6 +5,7 @@ import { Activity, AlertTriangle, ChevronDown, HelpCircle, Search, ShieldCheck, 
 import { api } from "../../lib/api";
 import { relativeTime } from "../../lib/format";
 import { cn } from "../../lib/utils";
+import { useAuth } from "../../lib/useAuth";
 import { useGoToPage } from "../../lib/useGoToPage";
 import { pageLabels, type Page } from "../../types/navigation";
 import type { Incident } from "../../types/ops";
@@ -60,6 +61,7 @@ function sevColor(severity: string): string {
 
 export function PlatformTopBar() {
   const goTo = useGoToPage();
+  const auth = useAuth();
   const [openMenu, setOpenMenu] = useState<null | "notif" | "activity">(null);
   const [searchText, setSearchText] = useState("");
   const actionsRef = useRef<HTMLDivElement | null>(null);
@@ -220,8 +222,19 @@ export function PlatformTopBar() {
         </div>
 
         <button className="infra-icon-action" title="帮助文档" type="button"><HelpCircle size={16} /></button>
-        <span className="infra-user-avatar"><UserRound size={16} /><small>A</small></span>
-        <ChevronDown className="infra-user-caret" size={14} />
+        {auth.authEnabled && auth.authenticated ? (
+          <span className="infra-user-chip" title={`${auth.subject} · ${auth.role}`}>
+            <UserRound size={14} />
+            <span className="infra-user-name">{auth.subject}</span>
+            <em className={cn("infra-user-role", auth.role)}>{auth.role}</em>
+            <button className="infra-user-logout" type="button" title="退出登录" onClick={auth.logout}>退出</button>
+          </span>
+        ) : (
+          <>
+            <span className="infra-user-avatar"><UserRound size={16} /><small>{auth.authenticated ? (auth.subject?.[0]?.toUpperCase() ?? "U") : "A"}</small></span>
+            <ChevronDown className="infra-user-caret" size={14} />
+          </>
+        )}
       </div>
     </header>
   );

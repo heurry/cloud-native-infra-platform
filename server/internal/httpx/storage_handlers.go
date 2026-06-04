@@ -131,7 +131,7 @@ func (a *API) runArchive(w http.ResponseWriter, r *http.Request) {
 		Operator string `json:"operator"`
 	}
 	_ = decodeBody(r, &req)
-	operator := orDefault(req.Operator, defaultOperator)
+	operator := a.actor(r, req.Operator)
 	results, err := a.runArchiveSweep(r.Context(), operator)
 	if err != nil {
 		a.fail(w, r, err)

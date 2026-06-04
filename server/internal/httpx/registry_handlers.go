@@ -47,7 +47,7 @@ func (a *API) registerServiceInstance(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, r, err)
 		return
 	}
-	a.Store.Audit(r.Context(), operatorOr(req.Operator), "operator", "service.register", "service_instance", name,
+	a.Store.Audit(r.Context(), a.actor(r, req.Operator), "operator", "service.register", "service_instance", name,
 		map[string]any{"base_url": req.BaseURL, "kind": req.Kind})
 	a.invalidateOverview(r) // 服务数 / 健康数变化 → 失效 overview 缓存（5B.4a）
 	WriteJSON(w, http.StatusOK, map[string]any{"name": name, "status": status})
@@ -93,9 +93,3 @@ func nilIfEmpty(s string) *string {
 	return &s
 }
 
-func operatorOr(s string) string {
-	if s == "" {
-		return "system"
-	}
-	return s
-}

@@ -36,7 +36,7 @@ func (a *API) diagnose(w http.ResponseWriter, r *http.Request) {
 		a.badRequest(w, r, "question required")
 		return
 	}
-	operator := orDefault(req.Operator, defaultOperator)
+	operator := a.actor(r, req.Operator)
 	ctx := r.Context()
 
 	// 1) Go 取证：聚合 metrics / 事件 / 部署 / 配置 / k8s 成证据 bundle（best-effort）。

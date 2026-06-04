@@ -106,7 +106,7 @@ func (a *API) registerModelVersion(w http.ResponseWriter, r *http.Request) {
 		a.badRequest(w, r, "status must be registered|active|deprecated")
 		return
 	}
-	operator := orDefault(req.Operator, defaultOperator)
+	operator := a.actor(r, req.Operator)
 	id, err := a.Store.RegisterModelVersion(r.Context(), store.RegisterModelParams{
 		ModelID:       req.ModelID,
 		Version:       req.Version,
@@ -213,7 +213,7 @@ func (a *API) updateModelStatus(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, r, err)
 		return
 	}
-	operator := orDefault(req.Operator, defaultOperator)
+	operator := a.actor(r, req.Operator)
 	a.Store.Audit(r.Context(), operator, "operator", "model.status", "model", modelID+":"+version,
 		map[string]any{"status": req.Status})
 	WriteJSON(w, http.StatusOK, map[string]any{"id": id, "model_id": modelID, "version": version, "status": req.Status})
@@ -231,7 +231,7 @@ func (a *API) deleteModelVersion(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, r, err)
 		return
 	}
-	a.Store.Audit(r.Context(), defaultOperator, "operator", "model.delete", "model", modelID+":"+version, map[string]any{})
+	a.Store.Audit(r.Context(), a.actor(r, ""), "operator", "model.delete", "model", modelID+":"+version, map[string]any{})
 	WriteJSON(w, http.StatusOK, map[string]any{"id": id, "model_id": modelID, "version": version, "deleted": true})
 }
 
@@ -277,7 +277,7 @@ func (a *API) uploadModelArtifact(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, r, err)
 		return
 	}
-	a.Store.Audit(r.Context(), defaultOperator, "operator", "model.artifact.upload", "model", mv.ModelID+":"+mv.Version,
+	a.Store.Audit(r.Context(), a.actor(r, ""), "operator", "model.artifact.upload", "model", mv.ModelID+":"+mv.Version,
 		map[string]any{"key": storedKey, "size": header.Size})
 	WriteJSON(w, http.StatusOK, map[string]any{"id": id, "artifact_uri": storedKey, "size": header.Size})
 }

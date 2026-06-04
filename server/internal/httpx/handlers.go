@@ -11,6 +11,7 @@ import (
 
 	"github.com/heurry/cloudnative-infra-platform/server/internal/agentcli"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/aiclient"
+	"github.com/heurry/cloudnative-infra-platform/server/internal/auth"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/blob"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/cache"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/k8s"
@@ -48,6 +49,10 @@ type API struct {
 	Blob *blob.Client
 	// C2：分层存储生命周期。是否开启周期自动归档（手动触发端点始终可用）。
 	StorageArchiveEnabled bool
+	// D2：认证授权 / RBAC。AuthEnabled=false 时全透传（开放演示）；Auth 签发器与 Users 始终就绪。
+	AuthEnabled bool
+	Auth        *auth.Issuer
+	Users       map[string]auth.Credential
 }
 
 // ---- GET /api/service-instances（复刻 ServiceInstanceController.listServiceInstances） ----
