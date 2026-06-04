@@ -1,0 +1,63 @@
+/* ===== C2：存储分层 ===== */
+.storage-page .storage-actions { display: inline-flex; gap: 8px; }
+
+.storage-retention {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+.storage-retention-label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #334155; }
+.storage-retention-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.storage-retention-pill {
+  font-size: 12px;
+  padding: 3px 9px;
+  color: #1e3a8a;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+}
+.storage-retention-note { color: #64748b; font-size: 12px; }
+
+.storage-tier-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+@media (max-width: 1100px) { .storage-tier-grid { grid-template-columns: 1fr; } }
+
+.storage-tier-card { display: flex; flex-direction: column; gap: 10px; }
+.storage-tier-head { display: flex; align-items: center; gap: 10px; }
+.storage-tier-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 9px;
+  background: #eff6ff; color: #2563eb;
+}
+.storage-tier-card.kind-object .storage-tier-icon { background: #fef3c7; color: #b45309; }
+.storage-tier-card.kind-cache .storage-tier-icon { background: #fee2e2; color: #dc2626; }
+.storage-tier-head strong { display: block; font-size: 14px; }
+.storage-tier-head small { font-size: 11px; font-weight: 600; }
+.storage-tier-head small.ok { color: #16a34a; }
+.storage-tier-head small.off { color: #94a3b8; }
+.storage-tier-metric strong { font-size: 22px; font-weight: 800; color: #0f172a; }
+.storage-tier-metric small { display: block; font-size: 12px; color: #64748b; margin-top: 2px; }
+.storage-tier-detail { font-size: 12px; color: #64748b; margin: 0; }
+.storage-table-list { display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto; }
+.storage-table-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 12px;
+  padding: 4px 0;
+  border-top: 1px solid #f1f5f9;
+}
+.storage-table-row span { color: #334155; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.storage-table-row em { color: #64748b; font-style: normal; }
+.storage-table-row small { color: #94a3b8; }
+.storage-archive-table td { font-size: 12px; }

@@ -46,6 +46,8 @@ type API struct {
 	// 5B.4b：对象存储（基准报告/评测产物/知识源文件）。Blob 为 nil 或禁用时降级。
 	// 写入点随 6A（benchmarks/evals/knowledge 变 Go 原生）接入。
 	Blob *blob.Client
+	// C2：分层存储生命周期。是否开启周期自动归档（手动触发端点始终可用）。
+	StorageArchiveEnabled bool
 }
 
 // ---- GET /api/service-instances（复刻 ServiceInstanceController.listServiceInstances） ----

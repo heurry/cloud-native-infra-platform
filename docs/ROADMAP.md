@@ -16,7 +16,7 @@
 | 服务治理 | ✅ 完整 | `router.go:63-67` 注册/心跳/注销/健康检查 + TTL reaper | 真服务注册表；拓扑连线是静态架构示意（后端无调用图） |
 | 可观测监控 | ✅ 最强项 | `router.go:43-60` metrics/alerts/k8s 快照（client-go 直读） | 指标来自真实 AIBrix/vLLM serving 栈；告警为规则评估 |
 | AI 运维分析 | ✅ 真实 | `ai_handlers.go` Go 聚证据→Python LLM→落库+审计；`/ai/chat:stream` 流式 Copilot | LLM 不可达落 failed 诊断 + 502，降级诚实 |
-| 分层存储 | 🟡 真实但偏静态 | Redis 热缓存 + PG 关系层 + MinIO 对象层(`benchmark_runner.go:239`) + pgvector | 按数据类型分层 + 大产物 offload；**无**自动冷热生命周期迁移 |
+| 分层存储 | ✅ 有生命周期（C2 已实现） | Redis 热 + PG 关系 + MinIO 对象 + pgvector；`storage_archiver.go` 把过期 metrics/audit 归档 PG→MinIO（保留期读自配置中心），`/storage/tiers\|archives` | 真冷热迁移：PG 体积随归档下降、冷数据经清单可回溯；前端「存储分层」页 |
 | 元数据管理 | ✅ 独立注册中心（C1 已实现） | `models` 表版本化（version/parent_version血缘/lora/tags/artifact）；`/api/models/registry` CRUD + 产物→MinIO + 按 model_id 绑定 service_instances | 真 model registry：版本/血缘/产物/运行时绑定；前端「元数据管理」tab 接真数据 |
 | CI/CD 自动化 | ✅ 真实 rollout（A1 已实现） | 给出 image → `PatchDeploymentImage` + 轮询 `RolloutStatus`（`deploy_runner.go`），成败回写 + 失败自动回滚；未给 image 仍为记录态 | 真改 Deployment 镜像 + 跟踪滚动发布；受 `ALLOW_K8S_WRITES` + 命名空间守卫约束。仍无 build/test 阶段（CD 而非完整 CI） |
 | 弹性扩缩容 | ✅ 可配置（A2 已实现） | 读：`/kubernetes/hpa` HPA spec/status；写：`ScaleDeployment` / `UpsertHPA` / `DeleteHPA`（`client.go`），路由见 `router.go` | 手动扩缩 + 配/删 HPA 真写；受 `ALLOW_K8S_WRITES` + 命名空间允许名单约束，serving 命名空间硬禁 |
@@ -103,11 +103,17 @@
   - [x] 状态机 registered→active→deprecated + 注销；血缘链按 parent_version 回溯
   - [ ] 真栈联调：起 compose（含 MinIO）实际跑一遍注册+上传+绑定展示
 
-### C2 — 分层存储做出「生命周期」 【M-L】
+### C2 — 分层存储做出「生命周期」 【M-L】✅ 已实现
 - **目标**：从「按类型静态分层」升级为有冷热迁移策略。
-- **做法**：后台 job 把过期的 `metrics_history / audit / benchmark artifacts` 从 PG 归档到 MinIO（JSON/Parquet），保留策略写进**配置中心**（自洽：用自己的配置中心管自己）；读路径透明回退对象层。前端加「存储分层/归档」面板显示各层占用与归档进度。
+- **做法**（已落地）：
+  - 迁移 `000010_archive_manifests`（归档清单：source_table/object_key/row_count/bytes/时间范围）。
+  - `storage_archiver.go`：归档 `metrics_samples` / `audit_events` 早于保留期的行——序列化 NDJSON → 上传 MinIO → 事务内删 PG + 写清单。**安全**：仅删严格早于 cutoff 的行；先上传后删；对象层不可用则跳过（绝不无对象层时删 PG）。保留期读自**配置中心 `storage.retention`**（平台用自己的配置中心管自己），缺省内置默认。周期自动归档 opt-in（`STORAGE_ARCHIVE_ENABLED`），手动 `POST /api/storage/archive` 始终可用。
+  - 端点：`GET /storage/tiers`（各层占用：Redis/PG 逐表行数+物理大小/MinIO 归档聚合）、`GET /storage/archives`、`GET /storage/archives/{id}`（预签名下载）、`POST /storage/archive`。
+  - 前端新增「存储分层」页：分层卡片 + 保留策略（带跳配置中心入口）+ 归档清单表（冷数据可回溯/下载）+「立即归档」。
 - **验收**：
-  - [ ] 调短保留期 → 旧数据迁 MinIO、PG 体积下降、查询仍可回溯
+  - [x] 调短保留期 → 触发归档 → 旧数据迁 MinIO、PG 行数/体积下降、归档清单可回溯下载（SQL 在 pgvector:pg16 实测：3 老行下沉、剩 2 行、清单 +1）
+  - [ ] 真栈联调：起 compose（含 MinIO）跑一次自动/手动归档看对象层增长
+- **说明**：可回溯 = 经归档清单取对象层（预签名下载/NDJSON），非「透明合并进 live 查询」（后者留作增强）。
 
 ### C3 — 服务拓扑从静态示意 → 真实调用图 【L，依赖数据源】
 - **目标**：连线/流量来自真实数据而非写死。

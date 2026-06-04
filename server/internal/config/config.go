@@ -39,6 +39,9 @@ type Config struct {
 	OTLPEndpoint string // OTLP/HTTP collector host:port（空=不导出 trace，优雅降级；/metrics 始终开）
 	OTLPInsecure bool   // OTLP 走明文（本地 collector 通常 true）
 	OTelService  string // trace 服务名（service.name 资源属性）
+	// C2：分层存储生命周期（PG 过期数据 → MinIO 归档）。
+	StorageArchiveEnabled bool          // 是否开启「周期自动归档」（默认关；手动触发端点始终可用）
+	ArchiveSweep          time.Duration // 自动归档扫描周期
 }
 
 func Load() Config {
@@ -71,6 +74,8 @@ func Load() Config {
 		OTLPEndpoint:     env("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
 		OTLPInsecure:     envBool("OTEL_EXPORTER_OTLP_INSECURE", true),
 		OTelService:      env("OTEL_SERVICE_NAME", "go-control-plane"),
+		StorageArchiveEnabled: envBool("STORAGE_ARCHIVE_ENABLED", false),
+		ArchiveSweep:          envSeconds("ARCHIVE_SWEEP_SECONDS", time.Hour),
 	}
 }
 
