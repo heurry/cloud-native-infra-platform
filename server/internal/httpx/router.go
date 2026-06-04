@@ -68,6 +68,9 @@ func NewRouter(a *API) *chi.Mux {
 		// 5A.3：基于当前指标快照的规则化告警评估（取代前端告警表 mock）。
 		r.Get("/alerts", a.alerts)
 
+		// C3：真实服务拓扑——OTel span 进程内派生的调用图（连线粗细 = 真实 QPS）。
+		r.Get("/topology/graph", a.topologyGraph)
+
 		// Phase 2：写操作 + 平台治理（外形复刻现有 Java 控制面）
 		r.Post("/service-instances/{name}/healthcheck", a.serviceInstanceHealthcheck)
 		// Phase 5 / 5B.2：服务注册表（注册 / 心跳 / 注销）；后台 reaper 据 TTL 清扫。

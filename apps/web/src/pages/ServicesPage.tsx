@@ -7,9 +7,10 @@ import { useGoToPage } from "../lib/useGoToPage";
 
 import { KpiGrid, PageHeader, PanelHeader, Sparkline, StatusBadge } from "../components/common/PlatformPrimitives";
 import { EmptyState, ErrorState, Skeleton } from "../components/common/FeedbackStates";
+import { CallGraph } from "../components/topology/CallGraph";
 import { normalizeServiceInstance } from "../data/mockPlatformData";
 import { servicesSnapshot, type ServiceConsoleRow } from "../data/platformSnapshots";
-import { api } from "../lib/api";
+import { api, topologyGraph } from "../lib/api";
 import { compact, fmt, pct, relativeTime } from "../lib/format";
 import { cn } from "../lib/utils";
 import type { Metrics, MetricsHistorySample, ServiceInstance } from "../types/platform";
@@ -43,6 +44,13 @@ export function ServicesPage() {
     queryKey: ["metrics", "history", "services"],
     queryFn: () => api<{ samples: MetricsHistorySample[] }>("/api/metrics/history?limit=30"),
     refetchInterval: 15000
+  });
+
+  // C3：真实调用图（OTel span 进程内派生；连线粗细 = 近 60s 真实 QPS）。
+  const callGraphQuery = useQuery({
+    queryKey: ["topology", "graph"],
+    queryFn: topologyGraph,
+    refetchInterval: 5000
   });
 
   const metrics = metricsQuery.data ?? null;
@@ -414,6 +422,28 @@ export function ServicesPage() {
           </section>
         </div>
       </div>
+
+      <section className="infra-panel service-callgraph-panel">
+        <PanelHeader
+          title="实时调用图"
+          action={
+            <span className="callgraph-action">
+              OTel trace 派生 · 近 {callGraphQuery.data?.window_seconds ?? 60}s
+              <button className="icon-button" onClick={() => callGraphQuery.refetch()} type="button" title="刷新">
+                <RefreshCw className={callGraphQuery.isFetching ? "spinning" : undefined} size={13} />
+              </button>
+            </span>
+          }
+        />
+        <p className="callgraph-note">连线粗细 = 近 60s 真实 QPS（来自本进程 span：入口 → 控制面 → ai-service / 推理网关）；与上方架构示意互补。</p>
+        {callGraphQuery.isLoading ? (
+          <Skeleton rows={3} />
+        ) : callGraphQuery.isError ? (
+          <ErrorState error={callGraphQuery.error} onRetry={callGraphQuery.refetch} />
+        ) : (
+          <CallGraph data={callGraphQuery.data} />
+        )}
+      </section>
     </section>
   );
 }

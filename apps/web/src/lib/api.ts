@@ -9,6 +9,7 @@
 
 import type { K8sHPA, ScaleDeploymentInput, UpsertHpaInput } from "../types/platform";
 import type { ModelRegistryList, RegisterModelInput, RegisteredModelVersion } from "../types/registry";
+import type { CallGraph } from "../types/topology";
 
 const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -134,6 +135,11 @@ export async function deleteK8sHpa(namespace: string, name: string): Promise<voi
 
 export function listModelRegistry(): Promise<ModelRegistryList> {
   return api<ModelRegistryList>("/api/models/registry");
+}
+
+// ===== C3：真实服务拓扑（trace 派生的调用图） =====
+export function topologyGraph(): Promise<CallGraph> {
+  return api<CallGraph>("/api/topology/graph");
 }
 
 export function registerModelVersion(input: RegisterModelInput): Promise<{ id: string; model_id: string; version: string }> {

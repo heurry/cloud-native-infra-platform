@@ -1,0 +1,38 @@
+/* ===== C3：实时调用图（OTel trace 派生；连线粗细 = 真实 QPS） ===== */
+.service-callgraph-panel { margin-top: 16px; }
+.callgraph-action { display: inline-flex; align-items: center; gap: 8px; }
+.callgraph-note {
+  margin: 2px 0 10px;
+  font-size: 12px;
+  color: #64748b;
+}
+.callgraph-empty {
+  padding: 28px 18px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #64748b;
+  text-align: center;
+  background: #f8fafc;
+  border: 1px dashed #e2e8f0;
+  border-radius: 10px;
+}
+.callgraph { width: 100%; overflow-x: auto; }
+.callgraph svg { width: 100%; min-width: 560px; height: auto; }
+
+.callgraph-edge line { stroke: #cbd5e1; fill: none; }
+.callgraph-edge.active line { stroke: #3b82f6; }
+.callgraph-edge.danger line { stroke: #ef4444; }
+.callgraph-edge.idle line { stroke: #cbd5e1; }
+.callgraph-edge-label { font-size: 10px; fill: #64748b; }
+.callgraph-edge.active .callgraph-edge-label { fill: #2563eb; font-weight: 600; }
+.callgraph-edge.danger .callgraph-edge-label { fill: #dc2626; font-weight: 600; }
+
+.callgraph-node rect { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; }
+.callgraph-node.kind-ingress rect { fill: #f1f5f9; }
+.callgraph-node.kind-control-plane rect { fill: #eff6ff; stroke: #93c5fd; }
+.callgraph-node.kind-service rect { fill: #ecfdf5; stroke: #86efac; }
+.callgraph-node.kind-serving rect { fill: #fef3c7; stroke: #fcd34d; }
+.callgraph-node.kind-cache rect { fill: #fee2e2; stroke: #fca5a5; }
+.callgraph-node.kind-datastore rect { fill: #f5f3ff; stroke: #c4b5fd; }
+.callgraph-node-label { font-size: 12px; font-weight: 700; fill: #1e293b; }
+.callgraph-node-sub { font-size: 10px; fill: #64748b; }
