@@ -13,6 +13,7 @@ import { KubernetesPage } from "./pages/KubernetesPage";
 import { ConfigCenterPage } from "./pages/ConfigCenterPage";
 import { KnowledgePage } from "./pages/KnowledgePage";
 import { CustomerSupportPage } from "./pages/CustomerSupportPage";
+import { RetrievalEvalPage } from "./pages/RetrievalEvalPage";
 import { ObservabilityPage } from "./pages/ObservabilityPage";
 import { PipelinesPage } from "./pages/PipelinesPage";
 import { ModelsPage } from "./pages/ModelsPage";
@@ -79,6 +80,9 @@ export function App() {
         </PageCacheSlot>
         <PageCacheSlot active={page === "support"} mounted={visitedPages.includes("support")}>
           <CustomerSupportPage />
+        </PageCacheSlot>
+        <PageCacheSlot active={page === "evals"} mounted={visitedPages.includes("evals")}>
+          <RetrievalEvalPage />
         </PageCacheSlot>
         <PageCacheSlot active={page === "benchmarks"} mounted={visitedPages.includes("benchmarks")}>
           <BenchmarksPage />
