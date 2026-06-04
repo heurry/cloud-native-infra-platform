@@ -154,6 +154,76 @@ func (c *Client) Embed(ctx context.Context, texts []string, isQuery bool) ([][]f
 	return out.Embeddings, nil
 }
 
+// ===== E1：agentic 诊断的单步推理（Go 编排循环，ai-service 当 reasoner）=====
+
+// AgentToolSchema 是暴露给模型的工具描述（read-only 取证端点）。
+type AgentToolSchema struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Parameters  map[string]any `json:"parameters"`
+}
+
+// AgentStepRequest：当前对话 + 可用工具，问模型「下一步调哪个工具」或「给最终结论」。
+type AgentStepRequest struct {
+	Messages    []map[string]any  `json:"messages"`
+	Tools       []AgentToolSchema `json:"tools"`
+	MaxTokens   int               `json:"max_tokens,omitempty"`
+	Temperature float64           `json:"temperature,omitempty"`
+}
+
+// AgentToolCall：模型要求调用的工具（arguments 可空）。
+type AgentToolCall struct {
+	Name      string         `json:"name"`
+	Arguments map[string]any `json:"arguments"`
+}
+
+// AgentFinal：模型给出的结构化最终诊断（与 DiagnoseResult 文本字段对齐）。
+type AgentFinal struct {
+	RootCause          string          `json:"root_cause"`
+	Confidence         *float64        `json:"confidence"`
+	Impact             string          `json:"impact"`
+	RecommendedActions json.RawMessage `json:"recommended_actions"`
+	RelatedResources   json.RawMessage `json:"related_resources"`
+}
+
+// AgentStepResult：tool_calls（继续取证）或 final（下结论），二选一；content 保留原文供 trace。
+type AgentStepResult struct {
+	Mode      string          `json:"mode"` // stub | live
+	ToolCalls []AgentToolCall `json:"tool_calls"`
+	Final     *AgentFinal     `json:"final"`
+	Content   string          `json:"content"`
+}
+
+// AgentStep 调 ai-service /internal/agent-step。错误分类同 Diagnose。
+func (c *Client) AgentStep(ctx context.Context, req AgentStepRequest) (*AgentStepResult, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal agent step: %w", err)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"/internal/agent-step", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrUnreachable, err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrUnreachable, err)
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
+	if err != nil {
+		return nil, fmt.Errorf("%w: read body: %v", ErrBadResponse, err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("%w: status %d: %s", ErrBadStatus, resp.StatusCode, truncate(data, 300))
+	}
+	var out AgentStepResult
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrBadResponse, err)
+	}
+	return &out, nil
+}
+
 // BaseURL 暴露给反向代理（httpx/proxy.go）拼上游地址。
 func (c *Client) BaseURL() string { return c.base }
 

@@ -15,7 +15,7 @@
 | 配置中心 | ✅ 完整 | `router.go:69-75` 增查/发布/回滚 + 审计，PG 落库 | 真 CRUD + 版本 + 回滚，前端已接 |
 | 服务治理 | ✅ 完整 | `router.go:63-67` 注册/心跳/注销/健康检查 + TTL reaper | 真服务注册表；C3 增「实时调用图」(OTel span 派生，连线粗细=真实 QPS)，serving 架构示意保留为互补视角 |
 | 可观测监控 | ✅ 最强项 | `router.go:43-60` metrics/alerts/k8s 快照（client-go 直读） | 指标来自真实 AIBrix/vLLM serving 栈；告警为规则评估 |
-| AI 运维分析 | ✅ 真实 | `ai_handlers.go` Go 聚证据→Python LLM→落库+审计；`/ai/chat:stream` 流式 Copilot | LLM 不可达落 failed 诊断 + 502，降级诚实 |
+| AI 运维分析 | ✅ 真实 + agentic（E1） | 单轮：`ai_handlers.go` Go 聚证据→LLM→落库+审计；agentic：`diagnose_agent.go` 多轮工具取证（`/ai/diagnose:agent`）+ 推理轨迹；`/ai/chat:stream` 流式 Copilot | LLM 不可达落 failed + 502；agent 无 GPU 走确定性 stub 脚本，降级诚实 |
 | 分层存储 | ✅ 有生命周期（C2 已实现） | Redis 热 + PG 关系 + MinIO 对象 + pgvector；`storage_archiver.go` 把过期 metrics/audit 归档 PG→MinIO（保留期读自配置中心），`/storage/tiers\|archives` | 真冷热迁移：PG 体积随归档下降、冷数据经清单可回溯；前端「存储分层」页 |
 | 元数据管理 | ✅ 独立注册中心（C1 已实现） | `models` 表版本化（version/parent_version血缘/lora/tags/artifact）；`/api/models/registry` CRUD + 产物→MinIO + 按 model_id 绑定 service_instances | 真 model registry：版本/血缘/产物/运行时绑定；前端「元数据管理」tab 接真数据 |
 | CI/CD 自动化 | ✅ 真实 rollout（A1 已实现） | 给出 image → `PatchDeploymentImage` + 轮询 `RolloutStatus`（`deploy_runner.go`），成败回写 + 失败自动回滚；未给 image 仍为记录态 | 真改 Deployment 镜像 + 跟踪滚动发布；受 `ALLOW_K8S_WRITES` + 命名空间守卫约束。仍无 build/test 阶段（CD 而非完整 CI） |
@@ -161,10 +161,15 @@
 
 ## Phase E · AI 能力升级
 
-### E1 — 诊断从单轮 → agentic 工具调用 【L】
-- **做法**：当前 `diagnose` 为「Go 预聚证据 → 单次 LLM」；升级为 agent，让模型按需调用工具（查 K8s、拉指标窗口、读最近部署/告警）多轮取证后下结论，复用现有只读端点当 tools。
+### E1 — 诊断从单轮 → agentic 工具调用 【L】✅ 已实现
+- **做法**（已落地，Go 编排循环 + ai-service 当 reasoner，无 Python→Go 回调）：
+  - Go `diagnose_agent.go`：注册只读取证工具（`recent_metrics` / `recent_deployments` / `open_incidents` / `kubernetes_pods`，复用既有数据访问，Go 本地执行）；多轮循环（≤5 步）调 ai-service `/internal/agent-step` 问「下一步调哪个工具 / 给最终结论」，执行 tool_calls、回灌结果、累积推理轨迹，落库（轨迹存 evidence，结论存 root_cause/actions）+ 审计。`POST /api/ai/diagnose:agent`。
+  - aiclient `AgentStep`；ai-service `agent.py`：live 用 OpenAI 工具调用（vLLM），stub 走确定性脚本（按 tools 依次取证→据结果复用 diagnose 规则下结论）——无 GPU 也能端到端跑 + 单测。
+  - 前端 AIOps 页加「Agent 诊断」按钮 + 「推理轨迹」面板（逐步展示模型调了哪些工具 / 看到什么）。
 - **验收**：
-  - [ ] 复杂故障下诊断含「模型主动查了哪些证据」的推理轨迹
+  - [x] 诊断含「模型主动查了哪些证据」的推理轨迹（多轮工具调用，stub/live 一致契约）
+  - [x] stub 模式可端到端演示 + 单测（ai-service 2 个 agent 测试 + 契约 JSON 形状校验）
+  - [ ] live 模型真栈联调：Qwen3 实际发起 tool_calls 的多轮取证（需 vLLM + 工具调用模板）
 
 ### E2 — RAG 评测体系 + 在线反馈回流 【M】
 - **做法**：`/messages/{id}/feedback` 已有端点——把反馈回流成评测数据集/重排信号；建立离线评测指标基线（接 B2）。语料仍限基准日志。

@@ -54,6 +54,36 @@ def chat_completion(
     return str(data["choices"][0]["message"]["content"])
 
 
+def chat_with_tools(
+    base_url: str,
+    model: str,
+    api_key: str,
+    messages: List[Dict[str, Any]],
+    tools: List[Dict[str, Any]],
+    *,
+    max_tokens: int,
+    temperature: float,
+    timeout: int,
+) -> Dict[str, Any]:
+    """E1：带 OpenAI 工具调用的非流式 completion；返回 assistant message（可能含 tool_calls）。"""
+    url = normalize_base_url(base_url) + "/chat/completions"
+    payload: Dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "stream": False,
+        "chat_template_kwargs": {"enable_thinking": False},
+    }
+    if tools:
+        payload["tools"] = tools
+        payload["tool_choice"] = "auto"
+    resp = requests.post(url, headers=_headers(api_key), json=payload, timeout=timeout)
+    resp.raise_for_status()
+    data = resp.json()
+    return dict(data["choices"][0]["message"])
+
+
 def stream_chat_completion(
     base_url: str,
     model: str,

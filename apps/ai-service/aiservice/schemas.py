@@ -61,6 +61,42 @@ class ChatRequest(BaseModel):
     temperature: float = 0.2
 
 
+# ===== E1：agentic 诊断单步（Go 编排循环，本服务当 reasoner）=====
+
+
+class AgentTool(BaseModel):
+    name: str
+    description: str = ""
+    parameters: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentStepRequest(BaseModel):
+    messages: List[Dict[str, Any]] = Field(default_factory=list)
+    tools: List[AgentTool] = Field(default_factory=list)
+    max_tokens: int = 1024
+    temperature: float = 0.2
+
+
+class AgentToolCall(BaseModel):
+    name: str
+    arguments: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentFinal(BaseModel):
+    root_cause: str = ""
+    confidence: Optional[float] = None
+    impact: str = ""
+    recommended_actions: List[Dict[str, Any]] = Field(default_factory=list)
+    related_resources: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class AgentStepResponse(BaseModel):
+    mode: str = "stub"  # stub | live
+    tool_calls: List[AgentToolCall] = Field(default_factory=list)
+    final: Optional[AgentFinal] = None
+    content: str = ""
+
+
 class EmbedRequest(BaseModel):
     texts: List[str]
     is_query: bool = False  # 查询侧加 Qwen3-Embedding 指令前缀；文档侧不加

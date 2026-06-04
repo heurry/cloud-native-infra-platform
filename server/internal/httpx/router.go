@@ -147,6 +147,8 @@ func NewRouter(a *API) *chi.Mux {
 		// Phase 3：AI 边界（Go 取证 → Python 推理 → Go 落库+审计）。
 		r.Route("/ai", func(r chi.Router) {
 			r.Post("/diagnose", a.diagnose)
+			// E1：agentic 诊断（多轮工具取证 + 推理轨迹）。
+			r.Post("/diagnose:agent", a.diagnoseAgent)
 			r.Get("/diagnoses", a.listDiagnoses)
 			r.Get("/diagnoses/{id}", a.getDiagnosis)
 			// SSE 流式问答经 Go 透传到 AI 服务，让 Copilot 走单一入口。
