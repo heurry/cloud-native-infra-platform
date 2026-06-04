@@ -263,7 +263,7 @@ export function PageHeader({
   );
 }
 
-export function PanelHeader({ title, action }: { title: string; action?: string }) {
+export function PanelHeader({ title, action }: { title: string; action?: ReactNode }) {
   return (
     <div className="infra-panel-header">
       <h2>{title}</h2>

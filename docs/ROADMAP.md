@@ -13,7 +13,7 @@
 | 宣称能力 | 真实程度 | 证据 | 诚实边界 |
 |---|---|---|---|
 | 配置中心 | ✅ 完整 | `router.go:69-75` 增查/发布/回滚 + 审计，PG 落库 | 真 CRUD + 版本 + 回滚，前端已接 |
-| 服务治理 | ✅ 完整 | `router.go:63-67` 注册/心跳/注销/健康检查 + TTL reaper | 真服务注册表；拓扑连线是静态架构示意（后端无调用图） |
+| 服务治理 | ✅ 完整 | `router.go:63-67` 注册/心跳/注销/健康检查 + TTL reaper | 真服务注册表；C3 增「实时调用图」(OTel span 派生，连线粗细=真实 QPS)，serving 架构示意保留为互补视角 |
 | 可观测监控 | ✅ 最强项 | `router.go:43-60` metrics/alerts/k8s 快照（client-go 直读） | 指标来自真实 AIBrix/vLLM serving 栈；告警为规则评估 |
 | AI 运维分析 | ✅ 真实 | `ai_handlers.go` Go 聚证据→Python LLM→落库+审计；`/ai/chat:stream` 流式 Copilot | LLM 不可达落 failed 诊断 + 502，降级诚实 |
 | 分层存储 | 🟡 真实但偏静态 | Redis 热缓存 + PG 关系层 + MinIO 对象层(`benchmark_runner.go:239`) + pgvector | 按数据类型分层 + 大产物 offload；**无**自动冷热生命周期迁移 |
@@ -109,12 +109,17 @@
 - **验收**：
   - [ ] 调短保留期 → 旧数据迁 MinIO、PG 体积下降、查询仍可回溯
 
-### C3 — 服务拓扑从静态示意 → 真实调用图 【L，依赖数据源】
+### C3 — 服务拓扑从静态示意 → 真实调用图 【L，依赖数据源】✅ 已实现
 - **目标**：连线/流量来自真实数据而非写死。
-- **做法**：(a) 接 AIBrix/envoy 的路由与请求计数指标，按 `endpoint_stats` 生成边权重；或 (b) 上线 OTel 后用 trace 派生 service graph。节点位置可固定，连线粗细 = 真实 QPS。
+- **做法**（已落地，走方案 b——借 D1 的 OTel span 派生）：
+  - `obs/servicegraph.go`：自定义 `sdktrace.SpanProcessor`，`OnEnd` 时把 server span（入口→控制面）与 client span（控制面→ai-service/推理网关，经 otelhttp 传输的目标 host 归类）归并成「边」，按 60×1s 滚动桶计近 60s QPS/错误。**始终安装**（TracerProvider 无条件挂该 processor），故调用图不依赖 OTLP 导出。
+  - `GET /api/topology/graph` 返回节点 + 边（边带 qps/requests/errors/total）。
+  - 前端 ServicesPage 新增「实时调用图」面板：`components/topology/CallGraph.tsx` 固定分列 SVG，**连线粗细 ∝ 真实 QPS**，与上方架构示意（serving 链路）互补。
+  - 单测覆盖聚合/自环忽略/滚动窗口过期。
 - **验收**：
-  - [ ] 拓扑连线粗细随真实流量变化
-- **风险**：取决于 serving 栈是否暴露边级指标；建议先做 D1。
+  - [x] 调用图连线粗细随真实流量变化（控制面自身 span：入口 / ai-service / 推理网关）
+  - [ ] serving 栈内部（gateway→router→vLLM）边级流量——本进程 span 看不到，需 Tempo metrics-generator 或 AIBrix 边级指标（留作增强）
+- **说明**：控制面不在 serving 数据路径上，故真实调用图反映的是「平台 API → 控制面 → 下游」的调用关系（真实、按流量加权），与 serving 架构示意是两个互补视角。
 
 ---
 
