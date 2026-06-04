@@ -35,6 +35,10 @@ type Config struct {
 	S3Bucket         string        // 5B.4b：bucket（默认 infra-artifacts）
 	S3UseSSL         bool          // 5B.4b：是否 TLS
 	S3PresignTTL     time.Duration // 5B.4b：预签名 URL 有效期
+	// D1：全链路可观测（OpenTelemetry traces + Prometheus metrics）。
+	OTLPEndpoint string // OTLP/HTTP collector host:port（空=不导出 trace，优雅降级；/metrics 始终开）
+	OTLPInsecure bool   // OTLP 走明文（本地 collector 通常 true）
+	OTelService  string // trace 服务名（service.name 资源属性）
 }
 
 func Load() Config {
@@ -64,6 +68,9 @@ func Load() Config {
 		S3Bucket:         env("S3_BUCKET", "infra-artifacts"),
 		S3UseSSL:         envBool("S3_USE_SSL", false),
 		S3PresignTTL:     envSeconds("S3_PRESIGN_TTL_SECONDS", 15*time.Minute),
+		OTLPEndpoint:     env("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
+		OTLPInsecure:     envBool("OTEL_EXPORTER_OTLP_INSECURE", true),
+		OTelService:      env("OTEL_SERVICE_NAME", "go-control-plane"),
 	}
 }
 

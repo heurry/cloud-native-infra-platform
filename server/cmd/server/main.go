@@ -22,6 +22,7 @@ import (
 	"github.com/heurry/cloudnative-infra-platform/server/internal/httpx"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/k8s"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/metrics"
+	"github.com/heurry/cloudnative-infra-platform/server/internal/obs"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/serving"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/store"
 )
@@ -29,6 +30,21 @@ import (
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 	cfg := config.Load()
+
+	// 0) D1：全链路可观测。设全局 propagator + （配置了 OTLP 时）TracerProvider；
+	// 未配置 endpoint 时为 no-op，绝不阻塞启动。/metrics 由路由始终暴露。
+	otelShutdown, err := obs.Init(context.Background(), obs.Config{
+		ServiceName:  cfg.OTelService,
+		ServiceVer:   "dev",
+		OTLPEndpoint: cfg.OTLPEndpoint,
+		OTLPInsecure: cfg.OTLPInsecure,
+	})
+	if err != nil {
+		slog.Warn("otel init failed (degraded, traces off)", "err", err)
+		otelShutdown = func(context.Context) error { return nil }
+	} else if cfg.OTLPEndpoint != "" {
+		slog.Info("otel tracing enabled", "endpoint", cfg.OTLPEndpoint, "service", cfg.OTelService)
+	}
 
 	// 1) 迁移：空库可重建出与 Flyway 等价的 schema + 种子。
 	if err := db.Migrate(cfg.MigrateURL()); err != nil {
@@ -140,6 +156,9 @@ func main() {
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("graceful shutdown failed", "err", err)
+	}
+	if err := otelShutdown(shutdownCtx); err != nil {
+		slog.Warn("otel shutdown (flush) failed", "err", err)
 	}
 	slog.Info("server stopped")
 }

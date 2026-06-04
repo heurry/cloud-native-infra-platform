@@ -1,0 +1,12 @@
+# D1：Grafana 看板自动置备 —— 从 /var/lib/grafana/dashboards 加载 JSON。
+apiVersion: 1
+
+providers:
+  - name: control-plane
+    orgId: 1
+    folder: "CloudNative Infra Platform"
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

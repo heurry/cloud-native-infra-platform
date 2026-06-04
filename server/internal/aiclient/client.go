@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // 错误分类：handler 据此区分「上游不可达/超时」(502) 与「上游返回非 2xx 或坏响应」。
@@ -35,7 +37,8 @@ func New(base string, timeout time.Duration) *Client {
 	}
 	return &Client{
 		base: strings.TrimRight(base, "/"),
-		http: &http.Client{Timeout: timeout},
+		// D1：otelhttp 传输注入 W3C traceparent，串起 Go→Python 链路（未配 OTLP 时为 no-op）。
+		http: &http.Client{Timeout: timeout, Transport: otelhttp.NewTransport(http.DefaultTransport)},
 	}
 }
 

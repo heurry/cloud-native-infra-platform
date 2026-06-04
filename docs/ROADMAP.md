@@ -114,10 +114,16 @@
 
 ## Phase D · 生产化 / 平台工程加固
 
-### D1 — 全链路可观测性（OpenTelemetry + Prometheus + Grafana） 【L】
-- **做法**：Go + ai-service 接 OTel SDK，traces 导出至 OTLP collector（Tempo/Jaeger）；Go 暴露 `/metrics`（Prometheus）；Grafana 看板。一次诊断的 Go→Python→vLLM 全链路 trace 可视化，并为 C3 喂数据。
+### D1 — 全链路可观测性（OpenTelemetry + Prometheus + Grafana） 【L】✅ 已实现
+- **做法**（已落地）：
+  - **Go 控制面**：新增 `internal/obs`——OTel TracerProvider + OTLP/HTTP 导出（env-gated，未配 `OTEL_EXPORTER_OTLP_ENDPOINT` 即 no-op，不阻塞启动）；Prometheus `/metrics`（始终开，HTTP 请求计数 + 时延直方图）。`httpx.Telemetry` 中间件建 server span（提取入站 traceparent）+ 记指标，复用 SSE-safe 的 statusRecorder（不破坏 chat:stream 流式）。
+  - **出站传播**：aiclient / proxyHTTPClient(Go→vLLM) / AI 反向代理(chat:stream) 的 Transport 均包 `otelhttp.NewTransport`，注入 W3C traceparent。
+  - **ai-service**：`aiservice/telemetry.py`（env-gated）——FastAPIInstrumentor 延续入站 traceparent，RequestsInstrumentor 把 span 继续传给上游 vLLM。requirements 增 otel sdk/exporter/instrumentation。
+  - **infra**：`deploy/compose` 增 `observability` profile（Tempo + Prometheus + Grafana，含数据源/看板自动置备）。一行启用：`OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318 docker compose --profile observability up -d`。
 - **验收**：
-  - [ ] 一条请求在 Grafana 可见端到端 span 瀑布
+  - [x] `/metrics` 暴露真实 HTTP 指标；Grafana「Control Plane」看板出请求速率/p95/状态码
+  - [x] 代码路径就绪：Go→ai-service→vLLM 经 traceparent 串联
+  - [ ] 真栈端到端联调：在 Grafana/Tempo 看到一条请求的端到端 span 瀑布（需起 observability profile + 有流量）
 
 ### D2 — 认证授权 / 多租户 RBAC 【L】
 - **做法**：现状 operator 写死为 `defaultOperator`；引入 JWT/OIDC，按路由 authz（只读/写/管理员），审计 actor 绑真实身份；配置中心/部署写操作要求相应角色。

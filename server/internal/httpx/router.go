@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
+	"github.com/heurry/cloudnative-infra-platform/server/internal/obs"
 )
 
 // NewRouter 构建带中间件链与 /api 路由组的 chi 路由器。
@@ -16,6 +17,7 @@ func NewRouter(a *API) *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(RequestID)
+	r.Use(Telemetry) // D1：server span（继承上游 traceparent）+ Prometheus 指标；须在 RequestID 之后。
 	r.Use(Logger)
 	r.Use(Recoverer)
 	r.Use(cors.Handler(cors.Options{
@@ -25,6 +27,9 @@ func NewRouter(a *API) *chi.Mux {
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
+
+	// D1：Prometheus 抓取端点（根路径，按惯例供 Prometheus scrape；Telemetry 中间件对它免计数）。
+	r.Handle("/metrics", obs.MetricsHandler())
 
 	r.Route("/api", func(r chi.Router) {
 		// 5B.4a：Redis 横切中间件（各自在 Redis 降级时透明直通）。
