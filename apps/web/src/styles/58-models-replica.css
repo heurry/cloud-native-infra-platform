@@ -214,3 +214,27 @@
   .models-process-ribbon { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .infra-kpi-grid.models-kpi-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+/* ===== C1：模型注册中心（元数据管理 tab） ===== */
+.registry-hint {
+  margin: 2px 0 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-foreground, #94a3b8);
+}
+.registry-table td .cell-subtle { display: block; }
+.registry-table td .link-btn { white-space: nowrap; }
+.registry-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.registry-actions select {
+  padding: 4px 6px;
+  font-size: 12px;
+  color: #334155;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+}

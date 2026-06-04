@@ -4,15 +4,19 @@ import { toast } from "sonner";
 import { Activity, BarChart3, Box, Eye, MoreVertical, Plus, RefreshCw, Route, Search } from "lucide-react";
 
 import { useGoToPage } from "../lib/useGoToPage";
+import { useModelRegistry } from "../lib/useModelRegistry";
 
 import { KpiGrid, PageHeader, PanelHeader, StatusBadge } from "../components/common/PlatformPrimitives";
 import { describeError, EmptyState, ErrorState, Skeleton } from "../components/common/FeedbackStates";
 import { Drawer, DrawerField } from "../components/common/Drawer";
+import { ModelRegistryPanel } from "../components/registry/ModelRegistryPanel";
+import { RegisterVersionDrawer } from "../components/registry/RegisterVersionDrawer";
 import { modelsSnapshot, type ModelRegistryRow } from "../data/platformSnapshots";
 import { normalizeServiceInstance } from "../data/mockPlatformData";
 import { api } from "../lib/api";
 import { cn } from "../lib/utils";
 import type { Metrics, ServiceInstance } from "../types/platform";
+import type { RegisteredModelVersion } from "../types/registry";
 import type { KpiItem } from "../types/ui";
 
 function isRouter(item: ServiceInstance): boolean {
@@ -31,7 +35,7 @@ export function ModelsPage() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [modelTab, setModelTab] = useState("模型列表");
-  const [localModels, setLocalModels] = useState<ModelRegistryRow[]>([]);
+  const registry = useModelRegistry();
 
   const instancesQuery = useQuery({
     queryKey: ["service-instances"],
@@ -60,7 +64,7 @@ export function ModelsPage() {
     }
   }
 
-  const rows = useMemo(() => [...localModels, ...deriveModelRows(instancesQuery.data)], [instancesQuery.data, localModels]);
+  const rows = useMemo(() => deriveModelRows(instancesQuery.data), [instancesQuery.data]);
   const typeOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.type))).sort(), [rows]);
   const statusOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.status))).sort(), [rows]);
   const filteredRows = useMemo(() => {
@@ -74,14 +78,10 @@ export function ModelsPage() {
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pageRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const kpis = useMemo(() => buildModelKpis(instancesQuery.data, metricsQuery.data), [instancesQuery.data, metricsQuery.data]);
-
-  function registerModel(row: ModelRegistryRow) {
-    setLocalModels((items) => [row, ...items]);
-    setPage(1);
-    setCreating(false);
-    toast.success("模型已加入当前会话", { description: "Go 后端暂未提供模型注册写接口" });
-  }
+  const kpis = useMemo(
+    () => buildModelKpis(instancesQuery.data, metricsQuery.data, registry.list.data?.versions),
+    [instancesQuery.data, metricsQuery.data, registry.list.data]
+  );
 
   return (
     <section className="infra-page models-page models-replica">
@@ -218,28 +218,11 @@ export function ModelsPage() {
           </table>
         )}
 
-        {modelTab === "元数据管理" && (
-          <table className="infra-table models-tab-table">
-            <thead><tr>{["模型 / 实例", "model_id", "类型", "GPU", "状态"].map((c) => <th key={c}>{c}</th>)}</tr></thead>
-            <tbody>
-              {(instancesQuery.data ?? []).length === 0 ? (
-                <tr><td colSpan={5}><EmptyState title="暂无模型元数据" description="service_instances 目录为空" /></td></tr>
-              ) : (instancesQuery.data ?? []).map((inst) => (
-                <tr key={inst.name}>
-                  <td><strong>{inst.name}</strong></td>
-                  <td>{inst.model_id || "-"}</td>
-                  <td>{inst.kind}</td>
-                  <td>{inst.gpu_id || "-"}</td>
-                  <td><StatusBadge status={inst.status} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        {modelTab === "元数据管理" && <ModelRegistryPanel registry={registry} />}
       </section>
 
       <RoutingPolicyDrawer instance={routeTarget} onClose={() => setRouteTarget(null)} />
-      <RegisterModelDrawer open={creating} onClose={() => setCreating(false)} onSubmit={registerModel} />
+      {creating ? <RegisterVersionDrawer registry={registry} onClose={() => setCreating(false)} /> : null}
     </section>
   );
 }
@@ -261,16 +244,19 @@ function deriveModelRows(instances: ServiceInstance[] | undefined): ModelRegistr
   }));
 }
 
-function buildModelKpis(instances: ServiceInstance[] | undefined, metrics: Metrics | undefined): KpiItem[] {
+function buildModelKpis(instances: ServiceInstance[] | undefined, metrics: Metrics | undefined, registryVersions: RegisteredModelVersion[] | undefined): KpiItem[] {
   const list = instances ?? [];
-  const modelCount = new Set(list.map((item) => item.model_id).filter(Boolean)).size;
+  const versions = registryVersions ?? [];
+  // 真实注册中心数据：模型数 = 不同 model_id；活跃版本 = status=active。
+  const registeredModels = new Set(versions.map((v) => v.model_id)).size;
+  const activeVersions = versions.filter((v) => v.status === "active").length;
   const healthy = list.filter((item) => item.status === "healthy").length;
   const totalInstances = metrics?.service_instances?.length ?? list.length;
   const types = new Set(list.map((item) => item.kind)).size;
   const compliance = list.length ? (healthy / list.length) * 100 : null;
   return [
-    { id: "total", label: "模型总数", value: String(modelCount), detail: "已注册模型", trend: [] },
-    { id: "versions", label: "活跃版本", value: String(modelCount), detail: "生产环境运行中", trend: [] },
+    { id: "total", label: "注册模型", value: String(registeredModels), detail: `${versions.length} 个版本`, trend: [] },
+    { id: "versions", label: "活跃版本", value: String(activeVersions), detail: "status=active", trend: [], tone: activeVersions ? "success" : undefined },
     { id: "instances", label: "运行实例", value: String(totalInstances), detail: "绑定实例总数", trend: [] },
     { id: "types", label: "模型类型", value: String(types), detail: "Runtime 类型", trend: [] },
     { id: "compliance", label: "合规检查", value: compliance == null ? "—" : `${compliance.toFixed(1)}%`, detail: "健康占比", trend: [], tone: compliance != null && compliance < 90 ? "warning" : "success" },
@@ -316,68 +302,6 @@ function RoutingPolicyDrawer({ instance, onClose }: { instance: ServiceInstance 
           {meta.target_instances.map((t) => <DrawerField key={t} label="target" value={t} />)}
         </>
       )}
-    </Drawer>
-  );
-}
-
-function RegisterModelDrawer({ open, onClose, onSubmit }: { open: boolean; onClose: () => void; onSubmit: (row: ModelRegistryRow) => void }) {
-  const [form, setForm] = useState({
-    name: "custom-llm",
-    description: "自定义模型服务",
-    type: "LLM",
-    version: "v1.0.0",
-    env: "prod",
-    quality: "90"
-  });
-  if (!open) return null;
-  const set = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm({ ...form, [key]: event.target.value });
-  return (
-    <Drawer
-      open={open}
-      onClose={onClose}
-      title="注册模型"
-      subtitle="当前会话草稿"
-      footer={
-        <>
-          <button className="ghost-button" onClick={onClose} type="button">取消</button>
-          <button
-            className="primary-button"
-            onClick={() => onSubmit({
-              id: `local-${Date.now()}`,
-              name: form.name.trim() || "custom-llm",
-              description: form.description.trim() || "自定义模型服务",
-              type: form.type,
-              version: form.version.trim() || "v1.0.0",
-              status: "未发布",
-              env: form.env,
-              quality: Number(form.quality) || null,
-              instances: 0,
-              updatedAt: "刚刚"
-            })}
-            type="button"
-          >
-            保存模型
-          </button>
-        </>
-      }
-    >
-      <div className="infra-drawer-section-title">基础信息</div>
-      <input className="drawer-input" placeholder="模型名称" value={form.name} onChange={set("name")} />
-      <input className="drawer-input" placeholder="描述" value={form.description} onChange={set("description")} />
-      <select className="drawer-input" value={form.type} onChange={set("type")}>
-        <option value="LLM">LLM</option>
-        <option value="Embedding">Embedding</option>
-        <option value="Vision">Vision</option>
-        <option value="Rerank">Rerank</option>
-        <option value="Classifier">Classifier</option>
-      </select>
-      <input className="drawer-input" placeholder="版本" value={form.version} onChange={set("version")} />
-      <select className="drawer-input" value={form.env} onChange={set("env")}>
-        <option value="prod">prod</option>
-        <option value="staging">staging</option>
-        <option value="dev">dev</option>
-      </select>
-      <input className="drawer-input" placeholder="质量评分" value={form.quality} onChange={set("quality")} />
     </Drawer>
   );
 }

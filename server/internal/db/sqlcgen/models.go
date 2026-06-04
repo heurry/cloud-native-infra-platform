@@ -221,16 +221,21 @@ type MetricsSample struct {
 }
 
 type Model struct {
-	ID           string    `json:"id"`
-	ModelID      string    `json:"model_id"`
-	DisplayName  *string   `json:"display_name"`
-	BaseModel    *string   `json:"base_model"`
-	ArtifactUri  *string   `json:"artifact_uri"`
-	TokenizerUri *string   `json:"tokenizer_uri"`
-	Status       string    `json:"status"`
-	Metadata     []byte    `json:"metadata"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID            string    `json:"id"`
+	ModelID       string    `json:"model_id"`
+	DisplayName   *string   `json:"display_name"`
+	BaseModel     *string   `json:"base_model"`
+	ArtifactUri   *string   `json:"artifact_uri"`
+	TokenizerUri  *string   `json:"tokenizer_uri"`
+	Status        string    `json:"status"`
+	Metadata      []byte    `json:"metadata"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	Version       string    `json:"version"`
+	LoraAdapter   *string   `json:"lora_adapter"`
+	ParentVersion *string   `json:"parent_version"`
+	Tags          []byte    `json:"tags"`
+	CreatedBy     *string   `json:"created_by"`
 }
 
 type ModelAdapter struct {
