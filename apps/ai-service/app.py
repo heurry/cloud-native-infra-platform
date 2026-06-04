@@ -15,11 +15,20 @@ from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 
 from aiservice import __version__
+from aiservice.agent import run_agent_step
 from aiservice.config import load_config
 from aiservice.diagnose import run_diagnose
 from aiservice.embed import embed_texts
 from aiservice.llm import sse_event, stream_chat_completion
-from aiservice.schemas import ChatRequest, DiagnoseRequest, DiagnoseResponse, EmbedRequest, EmbedResponse
+from aiservice.schemas import (
+    AgentStepRequest,
+    AgentStepResponse,
+    ChatRequest,
+    DiagnoseRequest,
+    DiagnoseResponse,
+    EmbedRequest,
+    EmbedResponse,
+)
 from aiservice.telemetry import setup_telemetry
 
 cfg = load_config()
@@ -43,6 +52,11 @@ def health() -> Dict[str, object]:
 @app.post("/internal/diagnose", response_model=DiagnoseResponse)
 def diagnose(req: DiagnoseRequest) -> DiagnoseResponse:
     return run_diagnose(req, cfg)
+
+
+@app.post("/internal/agent-step", response_model=AgentStepResponse)
+def agent_step(req: AgentStepRequest) -> AgentStepResponse:
+    return run_agent_step(req, cfg)
 
 
 @app.post("/internal/chat:stream")

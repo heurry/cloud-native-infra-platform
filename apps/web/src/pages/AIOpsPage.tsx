@@ -22,6 +22,10 @@ type DiagnosisListItem = {
   created_at?: string;
 };
 
+// E1：agentic 诊断响应（多轮取证轨迹）。
+type AgentTraceStep = { step: number; tool: string; summary: string };
+type AgentDiagnoseResult = { mode: string; steps: number; trace: AgentTraceStep[]; rootCause?: string };
+
 type AiOpsIncidentRow = {
   id: string;
   rawId?: string;
@@ -40,6 +44,8 @@ export function AIOpsPage() {
   const [incidentSearch, setIncidentSearch] = useState("");
   const [severityFilter, setSeverityFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  // E1：agentic 诊断的推理轨迹（最近一次 Agent 诊断的多轮取证）。
+  const [agentResult, setAgentResult] = useState<AgentDiagnoseResult | null>(null);
   const incidentsQuery = useQuery({
     queryKey: ["incidents", "aiops"],
     queryFn: () => api<{ incidents: Incident[] }>("/api/incidents"),
@@ -106,6 +112,35 @@ export function AIOpsPage() {
     onError: (error) => toast.error("AI 诊断失败", { description: describeAIOpsError(error) })
   });
 
+  // E1：agentic 诊断——模型多轮调用只读工具取证后下结论，返回推理轨迹。
+  const agentDiagnoseMutation = useMutation({
+    mutationFn: () =>
+      api<{ diagnosis?: { root_cause?: string }; mode?: string; steps?: number; trace?: AgentTraceStep[] }>(
+        "/api/ai/diagnose:agent",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            question: "请按需查指标/部署/故障/k8s 等证据，诊断当前 serving 是否存在异常并给出根因与修复建议。",
+            max_tokens: 768,
+            temperature: 0.2,
+            operator: "frontend"
+          }),
+          timeoutMs: 120_000
+        }
+      ),
+    onSuccess: (payload) => {
+      setAgentResult({
+        mode: payload.mode ?? "",
+        steps: payload.steps ?? 0,
+        trace: payload.trace ?? [],
+        rootCause: payload.diagnosis?.root_cause ?? undefined
+      });
+      toast.success(`Agent 诊断完成（${payload.steps ?? 0} 步取证 · ${payload.mode ?? ""}）`);
+      queryClient.invalidateQueries({ queryKey: ["ai", "diagnoses"] });
+    },
+    onError: (error) => toast.error("Agent 诊断失败", { description: describeAIOpsError(error) })
+  });
+
   const incidentTransitionMutation = useMutation({
     mutationFn: ({ id, action }: { id: string; action: "ack" | "resolve" }) => api<{ id: string; status: string }>(`/api/incidents/${id}/${action}`, {
       method: "POST",
@@ -143,7 +178,7 @@ export function AIOpsPage() {
   const criticalCount = incidents.filter((item) => item.severity === "严重").length;
   const warningCount = incidents.filter((item) => item.severity === "警告").length;
   const p95 = metrics?.p95_latency_ms ?? null;
-  const busy = createIncidentMutation.isPending || diagnoseMutation.isPending || incidentTransitionMutation.isPending;
+  const busy = createIncidentMutation.isPending || diagnoseMutation.isPending || agentDiagnoseMutation.isPending || incidentTransitionMutation.isPending;
 
   const kpis: KpiItem[] = [
     { id: "incidents", label: "打开的 Incident", value: String(incidents.length), detail: `${criticalCount} 严重 · ${warningCount} 警告`, trend: [], tone: criticalCount ? "danger" : warningCount ? "warning" : "success" },
@@ -165,6 +200,9 @@ export function AIOpsPage() {
             </button>
             <button className="console-refresh primary" disabled={busy} onClick={() => diagnoseMutation.mutate()} type="button">
               <Sparkles size={14} /> {diagnoseMutation.isPending ? "诊断中..." : "运行诊断"}
+            </button>
+            <button className="console-refresh primary" disabled={busy} onClick={() => agentDiagnoseMutation.mutate()} type="button" title="多轮工具取证 + 推理轨迹">
+              <Bot size={14} /> {agentDiagnoseMutation.isPending ? "Agent 取证中..." : "Agent 诊断"}
             </button>
             <button
               className="console-refresh"
@@ -296,6 +334,19 @@ export function AIOpsPage() {
               <span className="aiops-evidence-empty">尚无证据，运行诊断后由 metrics / 诊断结果生成</span>
             )}
           </div>
+          {agentResult && agentResult.trace.length > 0 ? (
+            <div className="aiops-agent-trace">
+              <strong>Agent 推理轨迹（{agentResult.steps} 步取证 · {agentResult.mode}）</strong>
+              <ol>
+                {agentResult.trace.map((s, i) => (
+                  <li key={`${s.step}-${s.tool}-${i}`}>
+                    <em>{s.tool}</em>
+                    <span>{s.summary}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
         </section>
       </div>
     </section>

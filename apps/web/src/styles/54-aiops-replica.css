@@ -687,3 +687,48 @@
   outline: none;
   width: 100%;
 }
+
+/* ===== E1：agentic 诊断推理轨迹 ===== */
+.aiops-agent-trace {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #edf2f7;
+}
+.aiops-agent-trace > strong { display: block; font-size: 13px; margin-bottom: 8px; color: #1e293b; }
+.aiops-agent-trace ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: trace;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.aiops-agent-trace li {
+  counter-increment: trace;
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+}
+.aiops-agent-trace li::before {
+  content: counter(trace);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #eff6ff;
+  color: #2563eb;
+  font-weight: 700;
+  font-size: 11px;
+}
+.aiops-agent-trace li em {
+  font-style: normal;
+  font-weight: 700;
+  color: #2563eb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.aiops-agent-trace li span { color: #475569; }
