@@ -12,6 +12,7 @@ import {
   Route,
   Server,
   Settings,
+  Split,
   Target,
   type LucideIcon
 } from "lucide-react";
@@ -30,6 +31,7 @@ const navItems: Array<{ id: Page; label: string; icon: LucideIcon }> = [
   { id: "pipelines", label: "发布流水线", icon: Route },
   { id: "benchmarks", label: "压测验证", icon: Gauge },
   { id: "models", label: "模型注册", icon: Cpu },
+  { id: "routing", label: "模型路由", icon: Split },
   { id: "knowledge", label: "知识库 / RAG", icon: Library },
   { id: "support", label: "智能客服", icon: Headset },
   { id: "evals", label: "检索评测", icon: Target },

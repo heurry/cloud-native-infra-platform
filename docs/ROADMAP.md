@@ -186,8 +186,19 @@
 ### E2 — RAG 评测体系 + 在线反馈回流 【M】
 - **做法**：`/messages/{id}/feedback` 已有端点——把反馈回流成评测数据集/重排信号；建立离线评测指标基线（接 B2）。语料仍限基准日志。
 
-### E3 — 模型路由 / A-B / 影子流量 【L】
+### E3 — 模型路由 / A-B / 影子流量 【L】 ✅ 已完成（2026-06-05）
 - **做法**：借 AIBrix 路由做多模型/多版本灰度、影子流量对比；与 C1（版本）、A1（发布）联动，形成「注册 → 灰度发布 → 评测 → 全量/回滚」闭环。
+- **实现**：
+  - 迁移 `000011_routing_policies`：`routing_policies`（命名策略：加权候选 + 可选影子）+ `routing_samples`（主路/影子样本）。复用了 000001 当年那张从未接入的同名桩表名（重建为真 schema；sqlc schema 列表不含本迁移，死结构体不变 → sqlc-verify 不受影响）。
+  - 控制面 `routing_handlers.go`：策略 CRUD + `GET /policies/{name}/stats`（A/B 聚合：样本量 / avg / p95 / 错误率）+ `POST .../promote`（全量：选定候选权重置 100、其余 0，旧权重快照入 `metadata.prev_variants`）+ `POST .../rollback`（按快照回滚）。审计绑真实操作者（`a.actor`）。
+  - 数据面 `routing_proxy.go`：`POST /api/routing/{policy}/v1/chat/completions` 加权随机选主路候选 → 反代上游（流式回客户端）；可选把同一请求镜像到影子目标（独立 background context、丢弃响应、只采指标），落 `routing_samples`。与 `proxyChatCompletions` 共享 `resolveEndpoint`/`dispatchUpstream`/`streamCopy`（后两者本期从 proxy_chat.go 抽出）。
+  - 安全默认：影子镜像受 `ROUTING_SHADOW_ENABLED`（默认关，避免对 serving 栈加倍负载）门禁；策略 CRUD 与加权 A/B 路由不受其约束。
+  - 前端「模型路由」页：策略卡（配置权重 vs 实测份额双层条 + 每候选「全量」按钮）+ 编辑/回滚/删除 + 可展开 A/B 对比（主路 vs 影子 p95/错误率条）+ 创建/编辑抽屉（动态候选 + 影子 + endpoint datalist）+ 闭环 ribbon。
+- **验收**：
+  - [x] 加权 A/B 路由 + 全量/回滚闭环（DB 集成测试：创建 → 路由 → 样本 → stats → promote → rollback）
+  - [x] 影子流量镜像（默认关；开启后镜像不回客户端、只采对照指标）
+  - [x] 与 C1（版本覆盖 `variant.model`）、A1（全量/回滚同语义）联动
+  - [ ] live 真栈：AIBrix 网关侧多副本灰度的端到端联调（需 serving 栈）
 
 ---
 

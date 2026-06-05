@@ -11,6 +11,7 @@ export type Page =
   | "config"
   | "pipelines"
   | "models"
+  | "routing"
   | "storage"
   | "settings";
 
@@ -27,6 +28,7 @@ export const pages: Page[] = [
   "config",
   "pipelines",
   "models",
+  "routing",
   "storage",
   "settings"
 ];
@@ -44,6 +46,7 @@ export const pageLabels: Record<Page, string> = {
   evals: "检索评测",
   benchmarks: "压测验证",
   models: "模型注册",
+  routing: "模型路由",
   storage: "存储分层",
   settings: "平台设置"
 };
@@ -63,6 +66,7 @@ export const pagePaths: Record<Page, string> = {
   evals: "/evals",
   benchmarks: "/benchmarks",
   models: "/models",
+  routing: "/routing",
   storage: "/storage",
   settings: "/settings"
 };

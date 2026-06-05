@@ -124,6 +124,20 @@ func NewRouter(a *API) *chi.Mux {
 		r.Post("/models/registry/{id}/artifact", a.uploadModelArtifact)
 		r.Get("/models/registry/{id}/artifact", a.modelArtifactURL)
 		r.Post("/proxy/{endpoint_id}/v1/chat/completions", a.proxyChatCompletions)
+
+		// E3：模型路由 / A-B / 影子流量（策略 CRUD + 灰度全量/回滚 + A/B 对比 + 路由数据面）。
+		r.Route("/routing", func(r chi.Router) {
+			r.Get("/policies", a.listRoutingPolicies)
+			r.Post("/policies", a.createRoutingPolicy)
+			r.Get("/policies/{name}", a.getRoutingPolicy)
+			r.Patch("/policies/{name}", a.updateRoutingPolicy)
+			r.Delete("/policies/{name}", a.deleteRoutingPolicy)
+			r.Get("/policies/{name}/stats", a.routingPolicyStats)
+			r.Post("/policies/{name}/promote", a.promoteRoutingVariant)
+			r.Post("/policies/{name}/rollback", a.rollbackRoutingPolicy)
+			// 数据面：按策略加权选主路 + 可选影子镜像。
+			r.Post("/{policy}/v1/chat/completions", a.routedChatCompletions)
+		})
 		r.Post("/benchmarks/serving", a.createServingBenchmark)
 		r.Get("/benchmarks/{run_id}", a.benchmarkRun)
 		r.Get("/benchmarks/{run_id}/events", a.benchmarkEvents)
