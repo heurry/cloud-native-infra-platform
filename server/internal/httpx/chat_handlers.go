@@ -146,10 +146,12 @@ func (a *API) streamChatMessage(w http.ResponseWriter, r *http.Request) {
 	_, _ = a.Store.InsertChatMessage(ctx, sessionID, "user", req.Content, nil)
 
 	// 检索（embed 失败 → 空 docs → 走 no_retrieval 兜底，不中断流）。
+	// E2：retrieveDocs 默认等价 SearchDocuments；开启 RAG_RERANK_FEEDBACK 时按反馈净分微调排序。
 	retrStart := time.Now()
 	docs := []store.DocHit{}
+	reranked := false
 	if vecs, err := a.AI.Embed(ctx, []string{retrievalQuery}, true); err == nil && len(vecs) > 0 {
-		docs, _ = a.Store.SearchDocuments(ctx, vecs[0], "", 4)
+		docs, reranked, _ = a.retrieveDocs(ctx, vecs[0], 4)
 	}
 	retrievalMs := msSince(retrStart)
 	citationDocIDs := make([]string, 0, len(docs))
@@ -158,7 +160,7 @@ func (a *API) streamChatMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	writeSSE(w, fl, "retrieval", map[string]any{
 		"request_id": requestID, "query": retrievalQuery, "memory_turns": len(memory),
-		"documents": docList(docs), "retrieval_ms": retrievalMs,
+		"documents": docList(docs), "retrieval_ms": retrievalMs, "reranked": reranked,
 	})
 
 	var answer strings.Builder

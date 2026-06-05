@@ -16,6 +16,7 @@ import { ConfigCenterPage } from "./pages/ConfigCenterPage";
 import { KnowledgePage } from "./pages/KnowledgePage";
 import { CustomerSupportPage } from "./pages/CustomerSupportPage";
 import { RetrievalEvalPage } from "./pages/RetrievalEvalPage";
+import { FeedbackReflowPage } from "./pages/FeedbackReflowPage";
 import { ObservabilityPage } from "./pages/ObservabilityPage";
 import { PipelinesPage } from "./pages/PipelinesPage";
 import { ModelsPage } from "./pages/ModelsPage";
@@ -88,6 +89,9 @@ export function App() {
         </PageCacheSlot>
         <PageCacheSlot active={page === "evals"} mounted={visitedPages.includes("evals")}>
           <RetrievalEvalPage />
+        </PageCacheSlot>
+        <PageCacheSlot active={page === "feedback"} mounted={visitedPages.includes("feedback")}>
+          <FeedbackReflowPage />
         </PageCacheSlot>
         <PageCacheSlot active={page === "benchmarks"} mounted={visitedPages.includes("benchmarks")}>
           <BenchmarksPage />

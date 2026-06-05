@@ -12,6 +12,7 @@ import type { ModelRegistryList, RegisterModelInput, RegisteredModelVersion } fr
 import type { ArchiveManifest, ArchiveRunResult, StorageTiers } from "../types/storage";
 import type { CallGraph } from "../types/topology";
 import type { RoutingPolicy, RoutingPolicyDetail, RoutingPolicyList, RoutingStats, SavePolicyInput } from "../types/routing";
+import type { DocSignalList, FeedbackDataset, RagEvalHistory, RagEvalResult } from "../types/feedback";
 
 const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -206,6 +207,20 @@ export function rollbackRoutingPolicy(name: string): Promise<{ policy: RoutingPo
 export async function serviceInstanceNames(): Promise<string[]> {
   const res = await api<{ instances: Array<{ name: string }> }>("/api/service-instances");
   return res.instances.map((i) => i.name);
+}
+
+// ===== E2：RAG 评测体系 + 在线反馈回流 =====
+export function ragDataset(): Promise<FeedbackDataset> {
+  return api<FeedbackDataset>("/api/rag/dataset");
+}
+export function ragSignal(): Promise<DocSignalList> {
+  return api<DocSignalList>("/api/rag/signal");
+}
+export function runRagEval(): Promise<RagEvalResult> {
+  return api<RagEvalResult>("/api/rag/eval", { method: "POST", body: JSON.stringify({}), timeoutMs: 120_000 });
+}
+export function ragEvalHistory(limit = 20): Promise<RagEvalHistory> {
+  return api<RagEvalHistory>(`/api/rag/eval/history?limit=${limit}`);
 }
 
 export function registerModelVersion(input: RegisterModelInput): Promise<{ id: string; model_id: string; version: string }> {

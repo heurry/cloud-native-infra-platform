@@ -1,0 +1,71 @@
+/* ===== E2：反馈回流 / RAG 评测 ===== */
+.feedback-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+@media (max-width: 1100px) { .feedback-grid { grid-template-columns: 1fr; } }
+
+/* 概览计数 */
+.reflow-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.reflow-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #eef2f7;
+  border-radius: 9px;
+}
+.reflow-stat span { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #64748b; }
+.reflow-stat strong { font-size: 20px; font-weight: 800; color: #0f172a; }
+.reflow-stat.tone-up strong { color: #16a34a; }
+.reflow-stat.tone-down strong { color: #ea580c; }
+.reflow-stat.tone-usable { background: #eff6ff; border-color: #bfdbfe; }
+.reflow-stat.tone-usable strong { color: #2563eb; }
+
+.reflow-table .reflow-q { max-width: 320px; }
+.reflow-table td { vertical-align: top; }
+
+/* 重排信号 */
+.rerank-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.rerank-rows { display: flex; flex-direction: column; gap: 8px; }
+.rerank-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.6fr) minmax(120px, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+.rerank-doc strong { display: block; font-size: 13px; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rerank-bar-wrap { display: flex; align-items: center; gap: 8px; }
+.rerank-bar { position: relative; flex: 1; height: 10px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
+.rerank-bar i { position: absolute; top: 0; left: 0; height: 100%; border-radius: 999px; }
+.rerank-bar i.pos { background: #22c55e; }
+.rerank-bar i.neg { background: #f97316; }
+.rerank-net { font-size: 12px; font-weight: 800; min-width: 28px; text-align: right; }
+.rerank-net.pos { color: #16a34a; }
+.rerank-net.neg { color: #ea580c; }
+.rerank-votes { font-size: 11.5px; white-space: nowrap; }
+
+/* 评测基线 */
+.eval-baseline-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; flex-wrap: wrap; }
+.eval-recall-cards { display: flex; gap: 10px; flex-wrap: wrap; }
+.eval-recall {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 16px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 9px;
+}
+.eval-recall span { font-size: 11px; color: #15803d; font-weight: 600; }
+.eval-recall strong { font-size: 20px; font-weight: 800; color: #166534; }
+.eval-trend { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.eval-history { display: flex; flex-direction: column; gap: 4px; }

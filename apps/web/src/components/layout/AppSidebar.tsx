@@ -14,6 +14,7 @@ import {
   Settings,
   Split,
   Target,
+  ThumbsUp,
   type LucideIcon
 } from "lucide-react";
 
@@ -35,6 +36,7 @@ const navItems: Array<{ id: Page; label: string; icon: LucideIcon }> = [
   { id: "knowledge", label: "知识库 / RAG", icon: Library },
   { id: "support", label: "智能客服", icon: Headset },
   { id: "evals", label: "检索评测", icon: Target },
+  { id: "feedback", label: "反馈回流", icon: ThumbsUp },
   { id: "storage", label: "存储分层", icon: HardDrive },
   { id: "settings", label: "设置", icon: Settings }
 ];

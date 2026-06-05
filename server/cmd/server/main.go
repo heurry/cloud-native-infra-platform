@@ -129,6 +129,7 @@ func main() {
 		Auth:                  auth.NewIssuer(cfg.AuthJWTSecret, cfg.AuthTokenTTL),
 		Users:                 auth.ParseUsers(cfg.AuthUsers),
 		RoutingShadowEnabled:  cfg.RoutingShadowEnabled,
+		RAGRerankFeedback:     cfg.RAGRerankFeedback,
 	}
 	if cfg.AuthEnabled {
 		slog.Info("auth enabled (RBAC)", "users", len(apiSvc.Users))

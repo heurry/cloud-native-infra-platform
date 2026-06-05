@@ -7,6 +7,7 @@ export type Page =
   | "knowledge"
   | "support"
   | "evals"
+  | "feedback"
   | "benchmarks"
   | "config"
   | "pipelines"
@@ -24,6 +25,7 @@ export const pages: Page[] = [
   "knowledge",
   "support",
   "evals",
+  "feedback",
   "benchmarks",
   "config",
   "pipelines",
@@ -44,6 +46,7 @@ export const pageLabels: Record<Page, string> = {
   knowledge: "知识库 / RAG",
   support: "智能客服",
   evals: "检索评测",
+  feedback: "反馈回流",
   benchmarks: "压测验证",
   models: "模型注册",
   routing: "模型路由",
@@ -64,6 +67,7 @@ export const pagePaths: Record<Page, string> = {
   knowledge: "/knowledge",
   support: "/support",
   evals: "/evals",
+  feedback: "/feedback",
   benchmarks: "/benchmarks",
   models: "/models",
   routing: "/routing",
