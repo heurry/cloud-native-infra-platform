@@ -164,10 +164,17 @@
   - [x] web 镜像实建通过：nginx envsubst 把 `${GO_SERVER_UPSTREAM}` 替成 `proxy_pass http://...go-server:8081`，`nginx -t` 语法 OK，nginx 自身 `$host` 保留
   - [ ] `helm install` 进 minikube 端到端起平台（需集群 + 把镜像 load 进集群）
 
-### D4 — 工程质量：e2e + 负载 + 混沌 【M】
+### D4 — 工程质量：e2e + 负载 + 混沌 【M】 ✅ 已完成（2026-06-05）
 - **做法**：补 API e2e（起真实依赖的集成测试）、关键路径负载基线、混沌实验（杀 Redis/MinIO/AI 验证降级——代码已支持降级，需测试固化）；CI 跑全套。
+- **实现**：
+  - **混沌** `chaos_test.go`：Redis 运行时猝死用 miniredis（无外部依赖、CI 任何环境都跑）固化三条横切 fail-open（cache-aside 穿透 / 限流放行 / 幂等重执行）；blob 禁用 + AI 不可达（gated DB）验证 `storage/tiers` 降级、评测 `502 ai_unavailable`（非 5xx/panic）。
+  - **e2e** `e2e_test.go`：经 `NewRouter` 全中间件链（RequestID/Telemetry/限流/幂等/认证）走关键路径——健康、服务实例、总览 cache HIT、配置中心创建→发布→回滚、幂等回放、存储分层、404 信封；起真实 PG + Redis + MinIO。
+  - **负载基线** `load_test.go`：进程内并发（600 req / c=24）压只读路径，零非 200 + p95 天花板回归护栏（本地实测 p50≈0.3ms / p95≈6ms / 27k qps）。
+  - **CI 全套**：新增 `integration` job（postgres+redis service container + minio step；`go test ./... -p 1` 带 `TEST_*` 真实依赖），让原本自动 skip 的集成/e2e/混沌/负载用例真正执行；`go-server` job 仍跑（无 DB 时 DB 用例 skip，Redis 混沌仍跑）。`-p 1` 串行规避跨包共享测试库的搜索表污染。
+  - **真实栈工具**：`deploy/chaos/run-chaos.sh`（compose 栈逐个杀依赖验证 200 降级）、`deploy/load/k6-baseline.js`（k6 压控制面只读路径，p95<800ms / 错误率<1% 阈值）、`docs/TESTING.md`（测试金字塔 + 降级矩阵 + 本地运行）。
 - **验收**：
-  - [ ] CI 绿；混沌实验下平台不崩、降级路径有覆盖
+  - [x] CI 绿；混沌实验下平台不崩、降级路径有覆盖（Redis/MinIO/AI 三类故障均有断言固化）
+  - [x] 起真实依赖的 e2e + 关键路径负载基线，纳入 CI `integration` job
 
 ---
 

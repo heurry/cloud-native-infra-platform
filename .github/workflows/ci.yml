@@ -94,3 +94,51 @@ jobs:
         run: |
           helm lint deploy/helm/cloudnative-infra-platform
           helm template cip deploy/helm/cloudnative-infra-platform > /dev/null
+
+  # D4：起真实依赖（PostgreSQL + Redis + MinIO）跑全套集成 / e2e / 混沌 / 负载测试。
+  # 与 go-server 单测互补——后者无 DB（DB 用例自动 skip）；本 job 让它们真正执行。
+  # 串行包（-p 1）：跨包共享同一测试库，避免并行污染搜索表（与本地 Docker 验证一致）。
+  integration:
+    runs-on: ubuntu-latest
+    env:
+      GOWORK: "off"
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: infra_platform
+          POSTGRES_USER: infra
+          POSTGRES_PASSWORD: infra
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U infra -d infra_platform"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: server/go.sum
+      - name: start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio server /data
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:9000/minio/health/live && break || sleep 2
+          done
+      - name: integration / e2e / chaos / load
+        working-directory: server
+        env:
+          TEST_DATABASE_URL: postgres://infra:infra@127.0.0.1:5432/infra_platform?sslmode=disable
+          TEST_REDIS_URL: redis://127.0.0.1:6379
+          TEST_S3_ENDPOINT: 127.0.0.1:9000
+        run: go test ./... -p 1
