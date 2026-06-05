@@ -34,6 +34,8 @@ goServer:
     OTEL_SERVICE_NAME: "go-control-plane"
     # C2：分层存储周期自动归档（默认关；手动 POST /api/storage/archive 始终可用）。
     STORAGE_ARCHIVE_ENABLED: "false"
+    # E3：模型路由影子流量（默认关；策略 CRUD 与加权 A/B 路由不受约束，仅镜像受此门禁）。
+    ROUTING_SHADOW_ENABLED: "false"
 
 # 前端（Vite SPA）。nginx 提供静态资源 + 反代 /api → go-server（同源）。
 web:

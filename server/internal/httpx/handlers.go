@@ -53,6 +53,8 @@ type API struct {
 	AuthEnabled bool
 	Auth        *auth.Issuer
 	Users       map[string]auth.Credential
+	// E3：模型路由影子流量总开关（默认关；策略 CRUD 与加权 A/B 路由不受其约束）。
+	RoutingShadowEnabled bool
 }
 
 // ---- GET /api/service-instances（复刻 ServiceInstanceController.listServiceInstances） ----

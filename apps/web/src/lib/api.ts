@@ -11,6 +11,7 @@ import type { K8sHPA, ScaleDeploymentInput, UpsertHpaInput } from "../types/plat
 import type { ModelRegistryList, RegisterModelInput, RegisteredModelVersion } from "../types/registry";
 import type { ArchiveManifest, ArchiveRunResult, StorageTiers } from "../types/storage";
 import type { CallGraph } from "../types/topology";
+import type { RoutingPolicy, RoutingPolicyDetail, RoutingPolicyList, RoutingStats, SavePolicyInput } from "../types/routing";
 
 const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -173,6 +174,38 @@ export function archiveDownloadURL(id: string): Promise<{ key: string; download_
 // ===== C3：真实服务拓扑（trace 派生的调用图） =====
 export function topologyGraph(): Promise<CallGraph> {
   return api<CallGraph>("/api/topology/graph");
+}
+
+// ===== E3：模型路由 / A-B / 影子流量 =====
+export function listRoutingPolicies(): Promise<RoutingPolicyList> {
+  return api<RoutingPolicyList>("/api/routing/policies");
+}
+export function getRoutingPolicy(name: string): Promise<RoutingPolicyDetail> {
+  return api<RoutingPolicyDetail>(`/api/routing/policies/${encodeURIComponent(name)}`);
+}
+export function routingPolicyStats(name: string, window = 3600): Promise<RoutingStats> {
+  return api<RoutingStats>(`/api/routing/policies/${encodeURIComponent(name)}/stats?window=${window}`);
+}
+export function createRoutingPolicy(input: SavePolicyInput): Promise<{ policy: RoutingPolicy }> {
+  return api("/api/routing/policies", { method: "POST", body: JSON.stringify(input) });
+}
+export function updateRoutingPolicy(name: string, input: SavePolicyInput): Promise<{ policy: RoutingPolicy }> {
+  return api(`/api/routing/policies/${encodeURIComponent(name)}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+export async function deleteRoutingPolicy(name: string): Promise<void> {
+  await api(`/api/routing/policies/${encodeURIComponent(name)}`, { method: "DELETE" });
+}
+export function promoteRoutingVariant(name: string, label: string): Promise<{ policy: RoutingPolicy }> {
+  return api(`/api/routing/policies/${encodeURIComponent(name)}/promote`, { method: "POST", body: JSON.stringify({ label }) });
+}
+export function rollbackRoutingPolicy(name: string): Promise<{ policy: RoutingPolicy }> {
+  return api(`/api/routing/policies/${encodeURIComponent(name)}/rollback`, { method: "POST", body: JSON.stringify({}) });
+}
+
+// 路由候选/影子目标的下拉来源：已注册的 serving 实例名（service_instances）。
+export async function serviceInstanceNames(): Promise<string[]> {
+  const res = await api<{ instances: Array<{ name: string }> }>("/api/service-instances");
+  return res.instances.map((i) => i.name);
 }
 
 export function registerModelVersion(input: RegisterModelInput): Promise<{ id: string; model_id: string; version: string }> {

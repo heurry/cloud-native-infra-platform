@@ -47,6 +47,9 @@ type Config struct {
 	AuthJWTSecret string       // HS256 签名密钥
 	AuthTokenTTL time.Duration // 令牌有效期
 	AuthUsers    string        // "user:pass:role,..."（空=默认 admin/operator/viewer 演示账户）
+	// E3：模型路由 / A-B / 影子流量。影子镜像会对 serving 栈产生额外负载，默认关——
+	// 策略 CRUD 与加权 A/B 路由始终可用，仅「镜像到影子目标」受此开关门禁。
+	RoutingShadowEnabled bool
 }
 
 func Load() Config {
@@ -85,6 +88,7 @@ func Load() Config {
 		AuthJWTSecret: env("AUTH_JWT_SECRET", "dev-insecure-change-me"),
 		AuthTokenTTL:  envSeconds("AUTH_TOKEN_TTL_SECONDS", 12*time.Hour),
 		AuthUsers:     env("AUTH_USERS", ""),
+		RoutingShadowEnabled: envBool("ROUTING_SHADOW_ENABLED", false),
 	}
 }
 

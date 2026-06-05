@@ -69,34 +69,9 @@ func (a *API) proxyChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	upstream := normalizeBaseURL(ep.BaseURL) + "/chat/completions"
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, upstream, bytes.NewReader(body))
-	if err != nil {
-		a.fail(w, r, err)
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-	reqID := r.Header.Get(headerRequestID)
-	if reqID == "" {
-		reqID = RequestIDFrom(r.Context())
-	}
-	req.Header.Set("x-request-id", reqID)
-	if auth := r.Header.Get("Authorization"); auth != "" {
-		req.Header.Set("Authorization", auth)
-	} else {
-		req.Header.Set("Authorization", "Bearer EMPTY")
-	}
-	model := ep.ModelID
-	if m, ok := payload["model"].(string); ok && m != "" {
-		model = m
-	}
-	req.Header.Set("model", model)
-	if ep.RoutingStrategy != "" {
-		req.Header.Set("routing-strategy", ep.RoutingStrategy)
-	}
-
+	payloadModel, _ := payload["model"].(string)
 	// 流式与非流式统一处理：无整体超时（SSE 长连），靠请求 context 取消。
-	resp, err := proxyHTTPClient.Do(req)
+	resp, err := dispatchUpstream(r.Context(), ep, body, requestIDFor(r), r.Header.Get("Authorization"), payloadModel)
 	if err != nil {
 		WriteError(w, r, http.StatusBadGateway, "upstream_unreachable", "upstream endpoint unreachable: "+err.Error())
 		return
@@ -111,21 +86,62 @@ func (a *API) proxyChatCompletions(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("x-target-pod", ep.TargetPod)
 	w.Header().Set("x-routing-endpoint", endpointID)
 	w.WriteHeader(resp.StatusCode)
+	streamCopy(w, resp)
+}
 
+// requestIDFor 取入站 x-request-id，缺失时回退到 RequestID 中间件生成的值。
+func requestIDFor(r *http.Request) string {
+	if id := r.Header.Get(headerRequestID); id != "" {
+		return id
+	}
+	return RequestIDFrom(r.Context())
+}
+
+// dispatchUpstream 构造并发起到 ep 的 /chat/completions 反代请求（流式/非流式统一）。
+// modelOverride 非空时覆盖上游 model 头（候选/影子的版本灰度）；为空则用 ep.ModelID。
+// 调用方负责关闭返回响应的 Body。
+func dispatchUpstream(ctx context.Context, ep *resolvedEndpoint, body []byte, reqID, authz, modelOverride string) (*http.Response, error) {
+	upstream := normalizeBaseURL(ep.BaseURL) + "/chat/completions"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, upstream, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-request-id", reqID)
+	if authz != "" {
+		req.Header.Set("Authorization", authz)
+	} else {
+		req.Header.Set("Authorization", "Bearer EMPTY")
+	}
+	model := ep.ModelID
+	if modelOverride != "" {
+		model = modelOverride
+	}
+	req.Header.Set("model", model)
+	if ep.RoutingStrategy != "" {
+		req.Header.Set("routing-strategy", ep.RoutingStrategy)
+	}
+	return proxyHTTPClient.Do(req)
+}
+
+// streamCopy 把上游响应边读边刷到 w（流式 token 即时下发），返回写出的字节数。
+func streamCopy(w http.ResponseWriter, resp *http.Response) int {
 	flusher, _ := w.(http.Flusher)
 	buf := make([]byte, 8192)
+	total := 0
 	for {
 		n, rerr := resp.Body.Read(buf)
 		if n > 0 {
 			if _, werr := w.Write(buf[:n]); werr != nil {
-				return
+				return total
 			}
+			total += n
 			if flusher != nil {
 				flusher.Flush() // 流式 token 即时下发
 			}
 		}
 		if rerr != nil {
-			return
+			return total
 		}
 	}
 }
