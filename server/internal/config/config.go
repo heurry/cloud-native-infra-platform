@@ -50,6 +50,9 @@ type Config struct {
 	// E3：模型路由 / A-B / 影子流量。影子镜像会对 serving 栈产生额外负载，默认关——
 	// 策略 CRUD 与加权 A/B 路由始终可用，仅「镜像到影子目标」受此开关门禁。
 	RoutingShadowEnabled bool
+	// E2：在线反馈回流。默认关时检索行为不变（仅采集反馈、回流评测数据集）；
+	// 开启后 chat 检索按反馈净分对候选做温和重排（命中过的好文档轻微上浮）。
+	RAGRerankFeedback bool
 }
 
 func Load() Config {
@@ -89,6 +92,7 @@ func Load() Config {
 		AuthTokenTTL:  envSeconds("AUTH_TOKEN_TTL_SECONDS", 12*time.Hour),
 		AuthUsers:     env("AUTH_USERS", ""),
 		RoutingShadowEnabled: envBool("ROUTING_SHADOW_ENABLED", false),
+		RAGRerankFeedback:    envBool("RAG_RERANK_FEEDBACK", false),
 	}
 }
 

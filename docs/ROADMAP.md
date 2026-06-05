@@ -183,8 +183,18 @@
   - [x] stub 模式可端到端演示 + 单测（ai-service 2 个 agent 测试 + 契约 JSON 形状校验）
   - [ ] live 模型真栈联调：Qwen3 实际发起 tool_calls 的多轮取证（需 vLLM + 工具调用模板）
 
-### E2 — RAG 评测体系 + 在线反馈回流 【M】
+### E2 — RAG 评测体系 + 在线反馈回流 【M】 ✅ 已完成（2026-06-05）
 - **做法**：`/messages/{id}/feedback` 已有端点——把反馈回流成评测数据集/重排信号；建立离线评测指标基线（接 B2）。语料仍限基准日志。
+- **实现**（无新迁移，全部从既有 `chat_*` 派生 + 落既有 `eval_runs`）：
+  - 反馈回流 `store/rag_feedback.go`：被 👍 的 assistant 回答 → 检索样本（问题取该回答前最近一条用户消息、gold 取回答 `metadata.citation_doc_ids`）；被引文档的赞/踩净分聚合 = 重排信号。
+  - 控制面 `rag_eval.go`：`GET /api/rag/dataset`（回流数据集 + 概览）、`GET /api/rag/signal`（重排信号 + 在线重排开关）、`POST /api/rag/eval`（对 👍 样本跑 **原始检索** recall@1/3/5，落 `eval_runs(dataset='rag-feedback-reflow')` 基线，落审计）、`GET /api/rag/eval/history`（基线趋势）。离线评测刻意用原始检索（不加反馈重排）规避「赞过文档被加权→recall 虚高」的数据泄漏。
+  - 在线重排（opt-in `RAG_RERANK_FEEDBACK`，默认关）：`retrieveDocs` 取更宽候选池后按反馈净分（tanh 限幅、权重温和）稳定重排再截断；接入 chat `streamChatMessage`，retrieval SSE 带 `reranked` 标记。默认关时检索行为完全不变。
+  - 前端「反馈回流 / RAG 评测」页：概览计数 + 回流数据集表 + 重排信号条（净分 + 赞踩）+ 离线评测基线（运行按钮 + recall@k + 历史 recall@3 趋势）+ 闭环 ribbon。
+- **验收**：
+  - [x] 反馈回流成评测数据集（👍 → 问题 + gold；DB 集成测试验证派生正确）
+  - [x] 反馈回流成重排信号（被引文档净分；opt-in 在线重排，单测验证温和上浮不喧宾夺主）
+  - [x] 离线 recall@k 基线 + 历史趋势（接 B2，落 eval_runs）
+  - [ ] live 真栈：真实客服流量积累反馈后的重排 A/B 效果（需 serving 栈 + 真实用量）
 
 ### E3 — 模型路由 / A-B / 影子流量 【L】 ✅ 已完成（2026-06-05）
 - **做法**：借 AIBrix 路由做多模型/多版本灰度、影子流量对比；与 C1（版本）、A1（发布）联动，形成「注册 → 灰度发布 → 评测 → 全量/回滚」闭环。

@@ -55,6 +55,8 @@ type API struct {
 	Users       map[string]auth.Credential
 	// E3：模型路由影子流量总开关（默认关；策略 CRUD 与加权 A/B 路由不受其约束）。
 	RoutingShadowEnabled bool
+	// E2：在线反馈重排开关（默认关；开启后 chat 检索按反馈净分微调候选排序）。
+	RAGRerankFeedback bool
 }
 
 // ---- GET /api/service-instances（复刻 ServiceInstanceController.listServiceInstances） ----

@@ -36,6 +36,8 @@ goServer:
     STORAGE_ARCHIVE_ENABLED: "false"
     # E3：模型路由影子流量（默认关；策略 CRUD 与加权 A/B 路由不受约束，仅镜像受此门禁）。
     ROUTING_SHADOW_ENABLED: "false"
+    # E2：在线反馈重排（默认关；关时检索行为不变，仅采集反馈/回流评测；开启后按反馈净分微调候选排序）。
+    RAG_RERANK_FEEDBACK: "false"
 
 # 前端（Vite SPA）。nginx 提供静态资源 + 反代 /api → go-server（同源）。
 web:

@@ -146,6 +146,14 @@ func NewRouter(a *API) *chi.Mux {
 		r.Post("/evals/customer-support", a.createCustomerSupportEval)
 		r.Get("/evals/{run_id}", a.evalRun)
 
+		// E2：RAG 评测体系 + 在线反馈回流（反馈 → 评测数据集 / 重排信号 → 离线基线）。
+		r.Route("/rag", func(r chi.Router) {
+			r.Get("/dataset", a.ragDataset)
+			r.Get("/signal", a.ragSignal)
+			r.Post("/eval", a.runRagEval)
+			r.Get("/eval/history", a.ragEvalHistory)
+		})
+
 		// 6A：chat 组 Go 原生（客服 RAG 对话；会话/消息→PG，messages:stream 流式 RAG）。
 		r.Route("/chat", func(r chi.Router) {
 			r.Post("/sessions", a.createChatSession)
