@@ -1,0 +1,55 @@
+########## RAG FEEDBACK closed loop (E2 + chat line79 + eval line87 + corpus line80): chat -> 👍 -> dataset -> recall@k -> history ##########
+# corpus = 2 benchmark serving-log docs (option A); LLM generation LIVE (Qwen3-4B via AIBrix); embeddings deterministic-stub (chat model has no /embeddings).
+
+--- session ---
+session_id = c1e3b17a-8882-4e34-9538-63bd8fc33dba
+
+--- TURN 1 live SSE proof (event order + retrieval + route + live tokens + metrics) ---
+event order: retrieval route token token token token token token token token token token token token token token token token token token token token token token token token token token token token token token token token token token token token token token token token citation metrics done 
+retrieval: docs= 2 ['benchmark:fce54b29-f202-482a-9b9d-65ad96388db9', 'benchmark:b427cc02-fd5d-4256-ae8a-17fd7043ed19']
+metrics: status= ok target_pod= aibrix-gw-bench ttft_ms= 267.469 fallback= '' (empty fallback => genuinely live)
+live answer (full, reassembled from token events):
+  根据最近的 faq_short 服务基准测试数据，p99 延迟为 3284.86ms，输出速度为 119.24 tokens/s。
+
+--- all messages in session (assistant message_ids + citation metadata) ---
+  [user     ] 6072bdec  'Summarize the p99 latency and output tokens-per-second '
+  [assistant] 6e789433  '根据最近的 faq_short 服务基准测试数据，p99 延迟为 3284.86ms，输出速度为 119.24' cites=2
+  [user     ] 5b055c6e  'How did the reasoning_long workload compare on throughp'
+  [assistant] 3f781dfa  '在最近的基准测试中，reasoning_long 工作负载在并发数为 2 时的 p95 首字延迟（TTFT）为' cites=2
+  [user     ] 9a56f5a9  'Which of the two recent benchmarks had a lower error ra'
+  [assistant] 6bdce91f  '根据最近的基准测试数据，两个工作负载（reasoning_long 和 faq_short）在并发数为 1 和' cites=2
+ASSISTANT_IDS=6e789433-5147-48c5-bc1c-6227f289ec45,3f781dfa-7d6a-465e-b331-8e1f572c531a,6bdce91f-d2e3-4d47-99a9-8afcc80830e8
+
+--- 👍 feedback on every assistant message (rating=up -> reflows as gold sample) ---
+  feedback: 6e789433 rating= up id= 29747ccd
+  feedback: 3f781dfa rating= up id= 7145c991
+  feedback: 6bdce91f rating= up id= 5bfaefea
+
+--- GET /rag/dataset (feedback -> retrieval-eval dataset) ---
+Traceback (most recent call last):
+  File "<string>", line 4, in <module>
+    print('  summary: total_feedback=',s['TotalFeedback'],'up=',s['Up'],'down=',s['Down'],'usable_samples=',s['UsableSamples'])
+                                       ~^^^^^^^^^^^^^^^^^
+KeyError: 'TotalFeedback'
+
+--- POST /rag/eval (offline recall@k on reflow dataset; RAW retrieval, no feedback rerank = no leakage) ---
+  run_id= 39c54431 status= completed
+  recall@1= 1  recall@3= 1  recall@5= 1  num_samples= 3
+  --- per-sample CASE DETAIL (line 87) ---
+   q= 'Which of the two recent benchmarks had a lowe' gold= ['benchmark:fce54b29', 'benchmark:b427cc02'] hit@1= True hit@3= True
+   q= 'How did the reasoning_long workload compare o' gold= ['benchmark:fce54b29', 'benchmark:b427cc02'] hit@1= True hit@3= True
+   q= 'Summarize the p99 latency and output tokens-p' gold= ['benchmark:fce54b29', 'benchmark:b427cc02'] hit@1= True hit@3= True
+
+--- GET /rag/eval/history (recall@k baseline over time) ---
+  dataset= rag-feedback-reflow runs= 1
+    2026-06-08T02:52:02 recall@1= 1 recall@3= 1 n= 3
+
+NOTE: recall is high because corpus=2 docs (both cited) — this validates the metric MECHANISM + reflow plumbing, not retrieval difficulty.
+RESULT: E2 chat(live RAG)->👍feedback->reflow dataset->offline recall@k->baseline history  ✓ PROVEN (lines 79/80/87)
+
+=== CORRECTED /rag/dataset summary (snake_case keys) ===
+  {'total_feedback': 3, 'up': 3, 'down': 0, 'usable_samples': 3}
+   sample q= 'Which of the two recent benchmarks had a lower e' gold= ['benchmark:fce54b29-f202-482a-9b9d-65ad96388db9', 'benchmark:b427cc02-fd5d-4256-ae8a-17fd7043ed19'] rating= up
+   sample q= 'How did the reasoning_long workload compare on t' gold= ['benchmark:fce54b29-f202-482a-9b9d-65ad96388db9', 'benchmark:b427cc02-fd5d-4256-ae8a-17fd7043ed19'] rating= up
+   sample q= 'Summarize the p99 latency and output tokens-per-' gold= ['benchmark:fce54b29-f202-482a-9b9d-65ad96388db9', 'benchmark:b427cc02-fd5d-4256-ae8a-17fd7043ed19'] rating= up
+CONFIRM: feedback reflowed into retrieval-eval dataset (usable gold-labelled samples) ✓

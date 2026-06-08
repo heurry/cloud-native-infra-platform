@@ -1,0 +1,29 @@
+########## E1: LIVE agentic diagnose — Qwen3-4B real multi-round tool_calls (line 191) ##########
+# Required enabling vLLM tool-calling: added --enable-auto-tool-choice --tool-call-parser qwen3_coder to the vLLM deployment.
+# Also fixed a live-path bug surfaced by E2E (see bottom).
+
+===== PROOF 1: vLLM gateway emits a STRUCTURED tool_call (qwen3_coder parser) =====
+request: get_weather tool offered for "What is the weather in Paris?"
+  finish_reason = tool_calls
+  tool_call -> get_weather {"city": "Paris"}
+
+===== PROOF 2: end-to-end agentic diagnose (Go orchestrates, Qwen3 reasons) =====
+  mode = live  (live = Qwen3 issued the tool_calls, not the stub script)
+  model_id = agent-live  status = completed
+  MULTI-ROUND tool calls Qwen3 chose (4 steps):
+    round 0: recent_metrics  -> error_rate=0, p95=<nil>, qps=0
+    round 1: recent_deployments  -> 5 条部署记录
+    round 2: open_incidents  -> 无未解决故障
+    round 3: kubernetes_pods  -> Pod 27 个，非 Running 0 个
+  root_cause: 当前系统指标（qps/p99）显示为0，与用户报告的'elevated p99 latency'不符，疑似用户查看的是历史快照或当前无流量。
+  confidence: 0.8  impact: 无法确认当前服务性能是否受损，但 Pod 均处于 Running 状态且无未解决故障。
+  evidence items (source=agent): 4
+  recommended_actions: 3  related_resources: 2
+
+===== BUG FOUND & FIXED via this E2E run =====
+Enabling tool-calling let the agent loop reach the forced-final step (no tools), where Go's
+aiclient serialized Tools(nil) as "tools":null -> ai-service Pydantic List(non-Optional) -> HTTP 422
+-> 'agent diagnose failed: upstream error'. Fix: added omitempty to AgentStepRequest.Tools json tag
+(server/internal/aiclient/client.go). Loop rounds send a real array (200); final omits it -> default [].
+
+RESULT: E1 Qwen3-4B real multi-round tool_calls end-to-end (live)  ✓ PROVEN (line 191)

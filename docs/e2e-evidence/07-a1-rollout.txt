@@ -1,0 +1,38 @@
+########## A1: REAL k8s ROLLOUT + AUTO-ROLLBACK (line 55) — guarded by k8sWriteGuard (allowlist=default, serving ns hard-denied) ##########
+# Target: demo-echo Deployment in 'default' ns (progressDeadlineSeconds=25 for fast failure detection).
+
+===== PART 1: GOOD rollout (v1 -> v2) SUCCEEDED =====
+trigger id=28b5ee92  | final: image=local/demo-echo:v2  ready=2/2
+audits:
+  03:03:57 deployment.trigger            demo-echo {image:v2, mode:k8s_rollout}
+  03:04:01 deployment.rollout.succeeded  default/demo-echo {image:v2, ready:2, desired:2}
+
+===== PART 2: BAD rollout (nonexistent image) -> AUTO-ROLLBACK to v2 =====
+trigger resp: {"id":"40d8e881-16ee-4ffb-88cc-b25e50aa8a1c","mode":"k8s_rollout","name":"demo-echo","status":"running"}
+polling for auto-rollback (k8s marks ProgressDeadlineExceeded ~25s, Go poller auto-rolls back)...
+  t=3s: image=local/demo-echo:nonexistent-tag-x ready=2/2 rolledback_audits=0
+  t=6s: image=local/demo-echo:nonexistent-tag-x ready=2/2 rolledback_audits=0
+  t=9s: image=local/demo-echo:nonexistent-tag-x ready=2/2 rolledback_audits=0
+  t=12s: image=local/demo-echo:nonexistent-tag-x ready=2/2 rolledback_audits=0
+  t=15s: image=local/demo-echo:nonexistent-tag-x ready=2/2 rolledback_audits=0
+  t=18s: image=local/demo-echo:nonexistent-tag-x ready=2/2 rolledback_audits=0
+  t=21s: image=local/demo-echo:nonexistent-tag-x ready=2/2 rolledback_audits=0
+  t=24s: image=local/demo-echo:nonexistent-tag-x ready=2/2 rolledback_audits=0
+  t=27s: image=local/demo-echo:nonexistent-tag-x ready=2/2 rolledback_audits=0
+  t=30s: image=local/demo-echo:v2 ready=2/2 rolledback_audits=1
+auto-rollback observed = yes (image restored to v2, NOT the bad tag)
+
+--- audits from the BAD rollout (expect rollout.failed + rollout.rolledback = 2 audits) ---
+   2026-06-08T03:07:24 deployment.rollout.rolledback {"to": "local/demo-echo:v2"}
+   2026-06-08T03:07:24 deployment.rollout.failed {"image": "local/demo-echo:nonexistent-tag-x", "reason": "progress deadline exceeded: ReplicaSe
+   2026-06-08T03:04:01 deployment.rollout.succeeded {"image": "local/demo-echo:v2", "ready": 2, "desired": 2}
+
+--- demo-echo health AFTER the failed rollout (proves no downtime; self-healed to v2) ---
+  image=local/demo-echo:v2  ready=2/2
+
+===== PART 3: namespace WRITE GUARD (safety) =====
+attempt rollout into a PROTECTED namespace (aibrix-system) -> must be DENIED:
+  POST /deployments ns=aibrix-system -> HTTP 403
+  (403 = k8sWriteGuard blocked write outside allowlist / serving ns hard-deny)
+
+RESULT: A1 real rollout(success) + auto-rollback(failure->prev, 2 audits, no downtime) + ns guard  ✓ PROVEN (line 55)

@@ -166,7 +166,9 @@ type AgentToolSchema struct {
 // AgentStepRequest：当前对话 + 可用工具，问模型「下一步调哪个工具」或「给最终结论」。
 type AgentStepRequest struct {
 	Messages    []map[string]any  `json:"messages"`
-	Tools       []AgentToolSchema `json:"tools"`
+	// omitempty：最终结论那一步不带工具（nil 切片）；否则序列化成 "tools":null，
+	// 被 ai-service 的 Pydantic（List 非 Optional）判 422。省略后服务端用默认空列表。
+	Tools       []AgentToolSchema `json:"tools,omitempty"`
 	MaxTokens   int               `json:"max_tokens,omitempty"`
 	Temperature float64           `json:"temperature,omitempty"`
 }

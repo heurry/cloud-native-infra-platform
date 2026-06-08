@@ -44,6 +44,21 @@ AIBrix / vLLM provide OpenAI-compatible model serving for AIOps and benchmark fl
 - AI Ops：Go 聚合证据，Python AI Service 生成根因、影响面、证据和建议动作。
 - 设置页：API、Agent、AI Service 健康探测和本地配置编辑。
 
+## 真栈端到端联调（2026-06-08）
+
+不止「能编译 / 有单测」——本平台已在**真 GPU serving 栈**（minikube + AIBrix + 2×vLLM Qwen3-4B）+ 真控制面 + 真 k8s 写 + 真可观测上，把每条闭环逐一跑通并留下机读证据：
+
+- **CI/CD 真执行**：触发部署真改 Deployment 镜像 → 坏镜像被 k8s `ProgressDeadlineExceeded` 检出 → **自动回滚上一版**（零停机，2 条审计）。
+- **弹性扩缩容真写**：真 scale + 真建/删 HPA；命名空间 + serving 名守卫对越权写返回 403。
+- **AI 诊断真 agentic**：Qwen3-4B 经 vLLM 工具调用发起**多轮 tool_calls** 自主取证后下结论。
+- **RAG 闭环 + 反馈重排 A/B**：live 流式问答（答案精确复述 benchmark 实测数值）→ 👍 反馈 → recall@k 评测；开启反馈重排后被赞文档真实上浮。
+- **分层存储生命周期**：9129 行 / ~118 MiB 真实遥测 PG→MinIO 归档，冷数据可预签名回环。
+- **全链路 trace**：一条 `/api/ai/chat:stream` 在 Tempo 出 37-span 跨服务瀑布。
+- **helm 自托管**：`helm install` 进 minikube，go-server 多副本自迁移 fresh DB 后 `/api/health` ok。
+- 期间真实发现并修复 1 个 live-path bug（agent `tools:null` → Pydantic 422）。
+
+> 串讲见 **[`docs/E2E-WALKTHROUGH.md`](docs/E2E-WALKTHROUGH.md)**，逐条原始输出在 **[`docs/e2e-evidence/`](docs/e2e-evidence/)**。
+
 ## 界面预览
 
 | 服务治理 | 集群快照 |

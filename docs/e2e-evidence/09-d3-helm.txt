@@ -1,0 +1,32 @@
+########## D3: helm install END-TO-END into minikube (line 165) — chart actually brings up the platform ##########
+# Images built by compose, retagged to chart names, loaded into minikube (minikube image load); pullPolicy=IfNotPresent.
+
+--- helm lint ---
+1 chart(s) linted, 0 chart(s) failed
+
+--- helm release (deployed) ---
+NAME	NAMESPACE    	REVISION	UPDATED                                	STATUS  	CHART                           	APP VERSION
+cip 	platform-helm	1       	2026-06-08 03:32:47.730950079 +0000 UTC	deployed	cloudnative-infra-platform-0.2.0	0.2.0      
+
+--- pods (real running workloads from the chart) ---
+  cloudnative-infra-platform-ai-service-cd4c4dfb4-6tcp8  ready=1/1  Running
+  cloudnative-infra-platform-go-server-6db8fdb968-kz848  ready=1/1  Running
+  cloudnative-infra-platform-go-server-6db8fdb968-rb5gp  ready=1/1  Running
+  cloudnative-infra-platform-minio-776f69df7c-g9p9t  ready=1/1  Running
+  cloudnative-infra-platform-postgres-79589d4d4-4c72k  ready=1/1  Running
+  cloudnative-infra-platform-redis-769b9fc9f6-zdpwr  ready=1/1  Running
+
+--- PROOF the chart's control plane actually RUNS (not just renders) ---
+  go-server replicas self-migrated the FRESH helm postgres:
+    {"time":"2026-06-08T03:33:26.205361036Z","level":"INFO","msg":"migrations applied"}
+    {"time":"2026-06-08T03:33:26.212954009Z","level":"INFO","msg":"server listening","addr":":8081"}
+    {"time":"2026-06-08T03:33:24.454117631Z","level":"INFO","msg":"migrations applied"}
+    {"time":"2026-06-08T03:33:24.473006967Z","level":"INFO","msg":"server listening","addr":":8081"}
+  helm postgres schema after boot:
+    36 tables in public schema
+  /api/health through the helm-installed go-server (port-forward 8087->8081):
+    {"service":"infra-platform-backend","status":"ok","version":"0.1.0"}
+
+
+RESULT: helm install -> real pods (go-server 2/2 + postgres + redis + minio) -> self-migrated -> /api/health ok  ✓ PROVEN (line 165)
+NOTE: web disabled (no web image); ai-service image loaded post-hoc to clear ImagePullBackOff (go-server stays healthy regardless).

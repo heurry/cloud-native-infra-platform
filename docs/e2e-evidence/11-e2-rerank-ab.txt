@@ -1,0 +1,27 @@
+########## E2: feedback-driven rerank A/B on REAL traffic (line 204) ##########
+# Same query, same corpus. A = raw cosine (no rerank). B = RAG_RERANK_FEEDBACK reranks by accumulated 👍 net-score.
+# Feedback signal (from earlier real chat 👍): benchmark:b427cc02 net=3, benchmark:fce54b29 net=3, other 3 docs net=0.
+# rerank boost = cosine + 0.1*tanh(net/2); net=3 -> +0.0905.
+
+query = 'p95 ttft serving'
+
+===== ARM A: RAW cosine retrieval (/knowledge/search, rerank-free baseline) =====
+   #1  cosine=  0.0376  net=0  benchmark:8d8a3dc9-b165-4893-8
+   #2  cosine=  0.0203  net=0  benchmark:4e7f6244-419f-4ea8-a
+   #3  cosine=  0.0136  net=3  benchmark:b427cc02-fd5d-4256-a
+   #4  cosine= -0.0137  net=3  benchmark:fce54b29-f202-482a-9
+   #5  cosine= -0.0183  net=0  benchmark:0c9f80e8-008a-4027-9
+
+===== ARM B: RERANKED retrieval (live chat, RAG_RERANK_FEEDBACK=1) =====
+retrieval event from the chat stream:
+   query = 'p95 ttft serving'  reranked = True
+   #1  score=  0.0136  net=3  benchmark:b427cc02-fd5d-4256-a
+   #2  score= -0.0137  net=3  benchmark:fce54b29-f202-482a-9
+   #3  score=  0.0376  net=0  benchmark:8d8a3dc9-b165-4893-8
+   #4  score=  0.0203  net=0  benchmark:4e7f6244-419f-4ea8-a
+
+EFFECT: the two 👍-favored docs (net=3) are boosted from cosine-rank ~3/4 to the TOP under rerank,
+        while raw cosine ranks the un-rated docs first. Offline /rag/eval deliberately uses RAW retrieval
+        (no rerank) to avoid feedback leakage inflating recall — see 04-rag-feedback-loop.txt.
+
+RESULT: E2 feedback-driven rerank changes live retrieval order (A/B)  ✓ PROVEN (line 204)

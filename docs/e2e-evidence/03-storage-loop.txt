@@ -1,0 +1,87 @@
+########## STORAGE LIFECYCLE closed loop (C2): retention-policy -> archive real telemetry to MinIO -> PG shrinks -> cold data retrievable ##########
+# The platform manages ITS OWN data lifecycle via ITS OWN config center (storage.retention).
+# Source data = 9129 REAL metrics_samples rows accumulated 2026-06-02..06-06 (not synthetic).
+
+--- 1) publish retention policy via config center: metrics_samples_days=1 (audit kept at 365 to preserve trail) ---
+{
+    "active_version": 1,
+    "config_key": "storage.retention",
+    "id": "6457a379-c54b-46e5-af70-e07ce82c49ab"
+}
+
+--- 2) storage tiers BEFORE archive (PG relational + MinIO object) ---
+  File "<string>", line 8
+    print(f"  PG relational total_bytes={t[\"total_bytes\"]:,}  metrics_samples rows={ms[\"rows\"]:,} bytes={ms[\"bytes\"]:,}")
+                                            ^
+SyntaxError: unexpected character after line continuation character
+  [raw PG count] metrics_samples = 9129
+
+--- 3) RUN ARCHIVE (manual sweep; allowed regardless of auto-loop flag) ---
+{
+    "results": [
+        {
+            "table": "metrics_samples",
+            "row_count": 9129,
+            "bytes": 123883713,
+            "object_key": "archive/metrics_samples/20260606/1780886562298855962.ndjson",
+            "retention_days": 1
+        },
+        {
+            "table": "audit_events",
+            "row_count": 0,
+            "bytes": 0,
+            "retention_days": 365
+        }
+    ]
+}
+
+--- 4) storage tiers AFTER archive (expect metrics_samples shrunk, object manifests grew) ---
+  File "<string>", line 7
+    print(f"  PG relational total_bytes={t[\"total_bytes\"]:,}  metrics_samples rows={ms[\"rows\"]:,} bytes={ms[\"bytes\"]:,}")
+                                            ^
+SyntaxError: unexpected character after line continuation character
+  [raw PG count] metrics_samples = 0 (remaining = rows newer than 1-day cutoff, i.e. collected since stack-up)
+
+--- 5) archive manifests (cold-data catalog) ---
+{
+    "archives": [
+        {
+            "archived_at": "2026-06-08T02:42:42.430437Z",
+            "archived_by": "e2e-validator",
+            "bytes": 123883713,
+            "id": "0ec7371c-0253-4386-86fb-5c2285b6ced0",
+            "max_ts": "2026-06-06T11:59:29.80006Z",
+            "min_ts": "2026-06-02T02:30:11.617954Z",
+            "object_key": "archive/metrics_samples/20260606/1780886562298855962.ndjson",
+            "row_count": 9129,
+            "source_table": "metrics_samples"
+        }
+    ]
+}
+first manifest id = 0ec7371c-0253-4386-86fb-5c2285b6ced0
+
+--- 6) presigned download of archived NDJSON (cold data retrievable roundtrip) ---
+  presigned GET http_status=200 bytes=123883713
+  archived NDJSON line count = 9129
+  first archived row (sample):
+{
+    "id": 1,
+    "source": "api",
+    "metrics": {
+        "gpu": [
+            {
+                "name": "NVIDIA GeForce RTX 3090",
+                "index": 0,
+                "power_watts": 9.99,
+                "memory_used_mb": 304,
+                "memory_total_mb": 24576,
+                "temperature_celsius": 32,
+
+RESULT: C2 retention-policy(config-center) -> archive real telemetry -> PG shrinks + MinIO manifest -> cold NDJSON roundtrip  ✓ PROVEN
+
+=== CORRECTED clean tier summary (post-archive state; replaces the f-string-errored blocks above) ===
+retention(from config center) = {'audit_events': 365, 'metrics_samples': 1}
+  [hot]        Redis cache   enabled=True  (cache-aside / 限流 / 幂等)
+  [relational] PG total_bytes=51,412,992  metrics_samples rows=0 (was 9129)  audit_events rows=24 (preserved)
+  [object]     MinIO enabled=True  manifests=1  archived_rows=9,129  archived_bytes=123,883,713 (~118 MiB cold data sunk to object tier)
+SUMMARY: metrics_samples 9129 rows / ~118 MiB moved PG->MinIO; live (post-cutoff) rows untouched; cold NDJSON downloadable.
