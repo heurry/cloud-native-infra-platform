@@ -1,0 +1,50 @@
+########## D1: END-TO-END TRACE WATERFALL in Tempo (single request, multi-service spans) ##########
+# One /api/ai/chat:stream request, trace stitched across services via W3C traceparent (otelhttp on Go, FastAPI/Requests instr on Python).
+traceID = 6fbb0a6c8e551721a65792290d9c1826
+
+total spans = 37   trace duration = 406.0 ms
+services in trace = ['ai-service', 'go-control-plane']
+
+WATERFALL (indent = call depth; bar = time span within trace):
+  go-control-plane POST /api/ai/chat:stream           |################################################# |   406.0ms @+0.0
+    go-control-plane HTTP POST                          |################################################# |   405.7ms @+0.2
+      ai-service       POST /internal/chat:stream         |################################################# |   404.7ms @+1.2
+        ai-service       POST /internal/chat:stream http re |#                                                 |     0.0ms @+1.3
+        ai-service       POST /internal/chat:stream http re |################################################# |   404.5ms @+1.5
+        ai-service       POST /internal/chat:stream http se |#                                                 |     0.1ms @+1.6
+        ai-service       POST /internal/chat:stream http se |#                                                 |     0.0ms @+1.8
+        ai-service       POST                               |#                                                 |    14.6ms @+2.2
+        ai-service       POST /internal/chat:stream http se |      #                                           |     0.0ms @+53.2
+        ai-service       POST /internal/chat:stream http se |        #                                         |     0.1ms @+66.7
+        ai-service       POST /internal/chat:stream http se |         #                                        |     0.0ms @+78.1
+        ai-service       POST /internal/chat:stream http se |           #                                      |     0.0ms @+90.9
+        ai-service       POST /internal/chat:stream http se |            #                                     |     0.0ms @+104.4
+        ai-service       POST /internal/chat:stream http se |              #                                   |     0.0ms @+117.2
+        ai-service       POST /internal/chat:stream http se |                #                                 |     0.0ms @+132.5
+        ai-service       POST /internal/chat:stream http se |                 #                                |     0.0ms @+143.2
+        ai-service       POST /internal/chat:stream http se |                   #                              |     0.0ms @+155.4
+        ai-service       POST /internal/chat:stream http se |                    #                             |     0.0ms @+168.5
+        ai-service       POST /internal/chat:stream http se |                      #                           |     0.0ms @+185.8
+        ai-service       POST /internal/chat:stream http se |                       #                          |     0.0ms @+194.1
+        ai-service       POST /internal/chat:stream http se |                         #                        |     0.0ms @+208.7
+        ai-service       POST /internal/chat:stream http se |                           #                      |     0.0ms @+220.0
+        ai-service       POST /internal/chat:stream http se |                             #                    |     0.0ms @+237.9
+        ai-service       POST /internal/chat:stream http se |                              #                   |     0.0ms @+244.2
+        ai-service       POST /internal/chat:stream http se |                               #                  |     0.0ms @+259.7
+        ai-service       POST /internal/chat:stream http se |                                 #                |     0.0ms @+269.7
+        ai-service       POST /internal/chat:stream http se |                                   #              |     0.0ms @+286.1
+        ai-service       POST /internal/chat:stream http se |                                    #             |     0.0ms @+294.2
+        ai-service       POST /internal/chat:stream http se |                                     #            |     0.0ms @+307.7
+        ai-service       POST /internal/chat:stream http se |                                       #          |     0.0ms @+320.4
+        ai-service       POST /internal/chat:stream http se |                                         #        |     0.0ms @+333.4
+        ai-service       POST /internal/chat:stream http se |                                          #       |     0.0ms @+342.9
+        ai-service       POST /internal/chat:stream http se |                                           #      |     0.0ms @+355.8
+        ai-service       POST /internal/chat:stream http se |                                             #    |     0.0ms @+371.5
+        ai-service       POST /internal/chat:stream http se |                                                # |     0.0ms @+396.5
+        ai-service       POST /internal/chat:stream http se |                                                 #|     0.0ms @+405.7
+        ai-service       POST /internal/chat:stream http se |                                                 #|     0.0ms @+405.9
+
+CROSS-SERVICE CONFIRMED: True (go-control-plane + ai-service spans in ONE trace)
+
+RESULT: D1 single-request end-to-end span waterfall across go-control-plane -> ai-service in Tempo  ✓ PROVEN (line 143)
+NOTE: serving-internal edges (AIBrix gateway->router->vLLM) are NOT in-process spans; left as enhancement (ROADMAP line 127).

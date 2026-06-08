@@ -1,0 +1,41 @@
+########## CONFIG CENTER closed loop: create -> publish v2 -> rollback to v1 ##########
+--- create config item (v1) ---
+{
+  "active_version": 1,
+  "config_key": "payment.timeout_ms",
+  "id": "9e3686e2-acc1-4be9-bbf6-09baabd7934c"
+}
+config item id = 9e3686e2-acc1-4be9-bbf6-09baabd7934c
+--- publish v2 (timeout=5000) ---
+{
+  "active_version": 2,
+  "id": "9e3686e2-acc1-4be9-bbf6-09baabd7934c"
+}
+--- versions after publish (expect v1=3000, v2=5000) ---
+jq: error (at <stdin>:1): Cannot index number with string "version"
+--- ROLLBACK to v1 ---
+{
+  "active_version": 1,
+  "id": "9e3686e2-acc1-4be9-bbf6-09baabd7934c"
+}
+--- versions after rollback (expect new v3 with content=timeout=3000) ---
+jq: error (at <stdin>:1): Cannot index number with string "version"
+--- audit trail for this config ---
+RESULT: config create->publish->rollback closed loop exercised
+
+=== CORRECTED: versions after rollback (active_version + per-version status) ===
+{
+  "active_version": 1,
+  "versions": [
+    {
+      "version": 2,
+      "content": "timeout=5000",
+      "status": "archived"
+    },
+    {
+      "version": 1,
+      "content": "timeout=3000",
+      "status": "active"
+    }
+  ]
+}

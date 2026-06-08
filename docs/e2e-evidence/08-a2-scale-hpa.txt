@@ -1,0 +1,55 @@
+########## A2: ELASTIC SCALING — real scale + HPA CRUD (line 68) — guarded write (allowlist=default) ##########
+
+===== A2.1 MANUAL SCALE (real guarded write) =====
+POST /kubernetes/deployments/demo-echo/scale {replicas:4} -> demo-echo reached 4/4 ready, then scaled back to 2 (verified via kubectl).
+
+===== A2.2 HPA UPSERT via platform API (real cluster write) =====
+{
+    "namespace": "default",
+    "name": "cpu-burner",
+    "target_kind": "Deployment",
+    "target_name": "cpu-burner",
+    "min_replicas": 1,
+    "max_replicas": 5,
+    "current_replicas": 0,
+    "desired_replicas": 0,
+    "metric": "cpu <unknown>/50%",
+    "scaling_active": false
+}
+--- verify HPA exists IN-CLUSTER (kubectl) ---
+NAME         REFERENCE               TARGETS              MINPODS   MAXPODS   REPLICAS   AGE
+cpu-burner   Deployment/cpu-burner   cpu: <unknown>/50%   1         5         0          0s
+--- audit ---
+   2026-06-08T03:16:39 k8s.hpa.upsert default/cpu-burner
+
+===== A2.3 HPA DELETE via platform API (real cluster write) =====
+{
+    "deleted": true,
+    "name": "cpu-burner",
+    "namespace": "default"
+}
+--- verify gone IN-CLUSTER ---
+Error from server (NotFound): horizontalpodautoscalers.autoscaling "cpu-burner" not found
+--- audit ---
+   2026-06-08T03:16:39 k8s.hpa.delete default/cpu-burner
+   2026-06-08T03:16:39 k8s.hpa.upsert default/cpu-burner
+
+===== A2.4 namespace WRITE GUARD =====
+  PUT /kubernetes/hpa target ns=aibrix-system -> HTTP 403 (403 = blocked)
+  POST scale qwen3-4b-customer ns=default name matches serving -> HTTP 403 (403 = serving hard-deny)
+
+(A2.5 live autoscale-under-load appended below once metrics-server is available)
+
+===== A2.5 live autoscale-under-load (metrics-server) — ENVIRONMENT-BLOCKED THIS SESSION =====
+Attempted: minikube addons enable metrics-server. Image registry.k8s.io/metrics-server/metrics-server:v0.8.1
+could NOT be pulled — registry.k8s.io (AWS S3 layer), aliyun, daocloud, bitnami and rancher mirrors all
+EOF/timeout under this session's network; a partial pull corrupted the shared content-addressed layer blob
+in the docker store (later pulls skip it by digest -> 13K empty image), unfixable without a `docker restart`
+that would tear down the live stack. This is an ENVIRONMENT limitation, not a platform one.
+
+What IS proven for A2 (the autoscaling WRITE path — previously "read-only/modeled"):
+  - real manual scale (deployment replicas) via guarded API + audit
+  - real HPA create/configure/delete as live k8s objects via guarded API + audit (verified by kubectl)
+  - namespace + serving-name guard denies protected targets (403)
+The remaining piece — HPA replicas moving under real CPU load — requires metrics-server and is the only
+A2 sub-item not demonstrated; it is gated on registry availability, kept as the documented exception.

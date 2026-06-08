@@ -1,0 +1,78 @@
+########## MODEL REGISTRY closed loop (C1): register -> artifact->MinIO -> bindings ##########
+--- register 2 live vLLM replicas as service instances (model_id=qwen3-4b-customer) ---
+{"name":"vllm-qwen3-4b-r0","status":"healthy"}
+{"name":"vllm-qwen3-4b-r1","status":"healthy"}
+--- register model version qwen3-4b-customer/1.0.0 (base + LoRA + lineage tags) ---
+{
+  "id": "ab2f09a2-0bc3-4080-8a29-489d6180add7",
+  "model_id": "qwen3-4b-customer",
+  "status": "registered",
+  "version": "1.0.0"
+}
+registry id = ab2f09a2-0bc3-4080-8a29-489d6180add7
+--- upload artifact (multipart -> MinIO) ---
+{
+  "artifact_uri": "models/qwen3-4b-customer/1.0.0/adapter_config.json",
+  "id": "ab2f09a2-0bc3-4080-8a29-489d6180add7",
+  "size": 54
+}
+--- get presigned artifact URL ---
+presigned: {
+  "download_url": "http://minio:9000/infra-artifacts/models/qwen3-4b-customer/1.0.0/adapter_config.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20260606%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260606T122120Z&X-Amz-Expires=900&X-Amz-SignedHeaders=host&X-Amz-Signature=dc70ab5746b43e8bba1676f1a771e1265f693cc9b7e7305f0e474844b01aebba",
+  "key": "models/qwen3-4b-customer/1.0.0/adapter_config.json"
+}
+--- download back from MinIO via presigned URL (roundtrip proof) ---
+curl: (3) URL rejected: Malformed input to a URL function
+curl: (3) URL rejected: Malformed input to a URL function
+
+--- registry list: version + runtime bindings ---
+{
+  "bindings": {
+    "qwen3-4b-customer": [
+      {
+        "name": "vllm-qwen3-4b-r0",
+        "kind": "vllm",
+        "status": "healthy",
+        "base_url": "http://127.0.0.1:8000",
+        "gpu_id": "0"
+      },
+      {
+        "name": "vllm-qwen3-4b-r1",
+        "kind": "vllm",
+        "status": "healthy",
+        "base_url": "http://127.0.0.1:8001",
+        "gpu_id": "1"
+      }
+    ],
+    "qwen3-4b-platform": [
+      {
+        "name": "aibrix-gateway",
+        "kind": "aibrix",
+        "status": "unknown",
+        "base_url": "http://127.0.0.1:8010/v1",
+        "gpu_id": "gateway"
+      },
+      {
+        "name": "auto-router",
+        "kind": "auto_router",
+        "status": "unknown",
+        "base_url": "http://127.0.0.1:8088/api/proxy/auto-router/v1",
+        "gpu_id": "auto"
+      },
+      {
+        "name": "direct-round-robin",
+        "kind": "client_round_robin",
+        "status": "unknown",
+        "base_url": "http://127.0.0.1:8088/api/proxy/direct-round-robin/v1",
+        "gpu_id": "client"
+      },
+RESULT: registry register->artifact(MinIO roundtrip)->bindings exercised
+
+=== CORRECTED (2026-06-08): MinIO presigned roundtrip download (proves cold artifact retrievable) ===
+# fix: keep the SIGNED Host header (minio:9000) via curl --resolve→127.0.0.1; --noproxy bypasses host :7897
+presigned GET status + size:
+  http_status=200 bytes=54
+downloaded artifact body (== the adapter_config.json uploaded via multipart):
+  {"adapter":"customer-support-lora","r":16,"alpha":32}
+
+RESULT: C1 register -> artifact upload(MinIO) -> presigned roundtrip download -> runtime bindings  ✓ FULLY PROVEN

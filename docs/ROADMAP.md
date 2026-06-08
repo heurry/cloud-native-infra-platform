@@ -3,6 +3,8 @@
 > 面向云原生微服务场景的分布式基础设施管理平台。
 > 本文档基于 2026-06-03 对当前代码（Go 控制面路由 + 各 handler + ai-service + 前端实际调用）的逐条核对结果，给出后续优化升级计划。
 > 维护约定：完成一项即勾选其验收清单；新增/调整任务保持「目标 → 做法 → 工作量 → 验收 → 风险」五要素。
+>
+> **2026-06-08 真栈端到端联调**：在真 GPU 栈（minikube + AIBrix + 2×vLLM Qwen3-4B + compose 控制面 + observability profile）上把全部「真栈联调」验收逐条跑通并留证，证据在 `docs/e2e-evidence/`，串讲见 `docs/E2E-WALKTHROUGH.md`。唯一未通过项：A2「副本随真实负载自动伸缩」因 metrics-server 镜像本次环境拉不下来（环境问题，非平台问题）。期间真实发现并修复 1 个 live-path bug（agent `tools:null`→422）。
 
 ---
 
@@ -27,7 +29,7 @@
 
 **跨切面（生产级，已落地）**：Redis 令牌桶限流 + 幂等键 + cache-aside、统一错误信封、审计日志、request-id、各依赖不可达透明降级、sqlc→store→dto 分层、D2 认证授权（HS256 JWT + viewer/operator/admin RBAC，默认关，审计绑真实身份）、D1 OTel trace + Prometheus /metrics。
 
-**总体判断**：「管理控制面 + 可观测 + AI 分析」三条线真实闭环；「自动化执行」线（CI/CD 跑流水线、主动扩缩容）是建模/观测而非执行。
+**总体判断**：「管理控制面 + 可观测 + AI 分析」三条线真实闭环；「自动化执行」线已从建模升级为**真执行**——A1 真改 Deployment 镜像 + 轮询滚动发布 + 失败自动回滚、A2 真 scale + 真配/删 HPA（均经 2026-06-08 真集群联调，见 `docs/e2e-evidence/`）；唯余「HPA 随真实负载自动伸缩」一项待 metrics-server（本次环境镜像源不可达）。CI/CD 仍是 CD（改镜像跟踪发布）而非含 build/test 的完整 CI。
 
 ---
 
@@ -52,7 +54,7 @@
   - [x] 前端「触发真实 rollout」后列表实时显示相位 + ready/desired 进度条
   - [x] 失败/坏镜像 → 自动回滚到旧镜像 + 两条审计记录（代码路径就绪）
   - [x] rollout 成败真实回写部署记录（success/failed）
-  - [ ] 真集群端到端联调（需 minikube + 一个 demo Deployment 作目标；ALLOW_K8S_WRITES + 非 serving 命名空间）
+  - [x] 真集群端到端联调（2026-06-08）：good image→滚动成功、bad image→k8s ProgressDeadlineExceeded→自动回滚上一版（2 审计 failed+rolledback，零停机）、ns 守卫 403（demo-echo @ default，ALLOW_K8S_WRITES）— `docs/e2e-evidence/07-a1-rollout.txt`
 - **风险处置**：默认关写（同 A2）；目标必须是允许名单内、非 serving 的 Deployment（如 `default/demo-echo`）。
 
 ### A2 — 弹性扩缩容从「只读 HPA」升级为「配 HPA + 手动扩缩」 【M】✅ 已实现
@@ -65,7 +67,8 @@
 - **验收**：
   - [x] 手动 scale 立即生效并落审计（写后 invalidate 快照，10s 内回显）
   - [x] 配/删 HPA 幂等、落审计；HPA 状态读路径实时回显 `desired vs current`
-  - [ ] 改 HPA target 后压测打流量、副本随真实负载伸缩（需 metrics-server + demo workload，留待联调）
+  - [x] 扩缩容真写端到端联调（2026-06-08）：手动 scale demo-echo 2→4→2、HPA upsert/delete 真建真删（kubectl 实证）、守卫 403（aibrix-system + serving 名 qwen3-4b-customer 硬禁）— `docs/e2e-evidence/08-a2-scale-hpa.txt`
+  - [ ] 仅「副本随真实负载自动伸缩」一项待 metrics-server：本次环境 registry.k8s.io 及各镜像源不可达 + docker 内容寻址 blob 损坏（重启 docker 才能修，会拆掉在跑的栈），见 08 的 A2.5；HPA/scale 写路径本身已联调通过
 - **风险处置**：默认不碰 AIBrix/vLLM serving 命名空间（硬禁 + 允许名单双保险）；操作对象限 `default` 等显式放行的 demo workload。
 
 ---
@@ -76,15 +79,15 @@
 - **目标**：露出 `/api/chat/sessions` 全套（列表/新建/流式问答/引用来源/反馈）。
 - **做法**：新增「智能客服」页（或并入知识库页）：左会话列表（`GET/POST /chat/sessions`），右流式对话（`messages:stream`，复用 `lib/api.ts` 的 SSE 客户端），展示 RAG 引用（来源 = 基准日志），消息级 👍/👎 调 `/messages/{id}/feedback`；加导航项。
 - **验收**：
-  - [ ] 能开会话、流式回答、看到检索引用、点反馈落库
-  - [ ] 语料严格限基准日志
+  - [x] 后端闭环真栈联调（2026-06-08）：建会话→流式 live 回答（Qwen3，fallback='' 即真 live）→检索引用（retrieval 事件带 citation doc_ids）→👍 反馈落库 — `docs/e2e-evidence/04-rag-feedback-loop.txt`（前端页见 [[copilot-ui-gap]]）
+  - [x] 语料严格限基准日志：rebuild-index 仅灌 benchmark_runs，所有 kb 文档 category=benchmark / source_uri=benchmark_runs/* — 04
 - **风险**：低。
 
 ### B2 — 检索召回评测前端 【S-M】
 - **目标**：露出 `/api/evals/customer-support`。
 - **做法**：评测页触发评测 → 轮询 `GET /evals/{run_id}` → 展示 recall@k / 命中率 / 逐条用例对错；可并入「压测验证」作第二个 tab。
 - **验收**：
-  - [ ] 跑一次评测看到指标卡 + 用例明细
+  - [x] 真栈联调（2026-06-08）：`POST /rag/eval` 出 recall@1/3/5 指标卡 + 逐样本 case detail（gold vs retrieved + hit@k）+ `/rag/eval/history` 基线趋势 — `docs/e2e-evidence/04-rag-feedback-loop.txt`
 - **风险**：低。
 
 ---
@@ -101,7 +104,7 @@
 - **验收**：
   - [x] 注册模型版本 → 产物上传至 MinIO → 模型页显示版本/基座+LoRA/血缘/标签/运行时绑定
   - [x] 状态机 registered→active→deprecated + 注销；血缘链按 parent_version 回溯
-  - [ ] 真栈联调：起 compose（含 MinIO）实际跑一遍注册+上传+绑定展示
+  - [x] 真栈联调（2026-06-08）：注册 qwen3-4b-customer/1.0.0 + 产物上传 MinIO + 预签名回环下载（HTTP 200，字节一致）+ 绑定显示 2 个 vLLM 副本 — `docs/e2e-evidence/02-registry-loop.txt`
 
 ### C2 — 分层存储做出「生命周期」 【M-L】✅ 已实现
 - **目标**：从「按类型静态分层」升级为有冷热迁移策略。
@@ -112,7 +115,7 @@
   - 前端新增「存储分层」页：分层卡片 + 保留策略（带跳配置中心入口）+ 归档清单表（冷数据可回溯/下载）+「立即归档」。
 - **验收**：
   - [x] 调短保留期 → 触发归档 → 旧数据迁 MinIO、PG 行数/体积下降、归档清单可回溯下载（SQL 在 pgvector:pg16 实测：3 老行下沉、剩 2 行、清单 +1）
-  - [ ] 真栈联调：起 compose（含 MinIO）跑一次自动/手动归档看对象层增长
+  - [x] 真栈联调（2026-06-08）：经配置中心置短保留期 → 手动归档把 9129 行真实 metrics_samples（~118 MiB）PG→MinIO、PG 该表降至 0、清单 +1、冷数据 NDJSON 预签名回环（9129 行）— `docs/e2e-evidence/03-storage-loop.txt`
 - **说明**：可回溯 = 经归档清单取对象层（预签名下载/NDJSON），非「透明合并进 live 查询」（后者留作增强）。
 
 ### C3 — 服务拓扑从静态示意 → 真实调用图 【L，依赖数据源】✅ 已实现
@@ -140,7 +143,7 @@
 - **验收**：
   - [x] `/metrics` 暴露真实 HTTP 指标；Grafana「Control Plane」看板出请求速率/p95/状态码
   - [x] 代码路径就绪：Go→ai-service→vLLM 经 traceparent 串联
-  - [ ] 真栈端到端联调：在 Grafana/Tempo 看到一条请求的端到端 span 瀑布（需起 observability profile + 有流量）
+  - [x] 真栈端到端联调（2026-06-08）：Tempo 查到一条 `/api/ai/chat:stream` 的 37-span 跨服务瀑布（go-control-plane→ai-service，traceparent 串联，token 流式呈阶梯）— `docs/e2e-evidence/06-trace-waterfall.txt`
 
 ### D2 — 认证授权 / 多租户 RBAC 【L】✅ 已实现
 - **做法**（已落地，默认关——现有开放演示零影响；开启即 RBAC）：
@@ -162,7 +165,7 @@
 - **验收**：
   - [x] `helm lint` + `helm template` 通过（6 Deployments / 8 Services，ingress 默认关）；新配置/web 渲染正确
   - [x] web 镜像实建通过：nginx envsubst 把 `${GO_SERVER_UPSTREAM}` 替成 `proxy_pass http://...go-server:8081`，`nginx -t` 语法 OK，nginx 自身 `$host` 保留
-  - [ ] `helm install` 进 minikube 端到端起平台（需集群 + 把镜像 load 进集群）
+  - [x] `helm install` 进 minikube 端到端起平台（2026-06-08）：镜像 load 进集群后 helm install → 6 pods 全 Running，go-server 2/2 自迁移 fresh DB（36 张表 + "migrations applied"），`/api/health` ok — `docs/e2e-evidence/09-d3-helm.txt`（web 关；ai-service 镜像后补）
 
 ### D4 — 工程质量：e2e + 负载 + 混沌 【M】 ✅ 已完成（2026-06-05）
 - **做法**：补 API e2e（起真实依赖的集成测试）、关键路径负载基线、混沌实验（杀 Redis/MinIO/AI 验证降级——代码已支持降级，需测试固化）；CI 跑全套。
@@ -188,7 +191,7 @@
 - **验收**：
   - [x] 诊断含「模型主动查了哪些证据」的推理轨迹（多轮工具调用，stub/live 一致契约）
   - [x] stub 模式可端到端演示 + 单测（ai-service 2 个 agent 测试 + 契约 JSON 形状校验）
-  - [ ] live 模型真栈联调：Qwen3 实际发起 tool_calls 的多轮取证（需 vLLM + 工具调用模板）
+  - [x] live 模型真栈联调（2026-06-08）：vLLM 开 `--enable-auto-tool-choice --tool-call-parser qwen3_coder` 后，Qwen3-4B 实际发起结构化 tool_calls；`/ai/diagnose:agent` 走 live 多轮（recent_metrics→recent_deployments→open_incidents→kubernetes_pods）出带证据的结论。期间修复 aiclient `tools:null`→Pydantic 422 的 live-path bug — `docs/e2e-evidence/10-e1-agent-toolcalls.txt`
 
 ### E2 — RAG 评测体系 + 在线反馈回流 【M】 ✅ 已完成（2026-06-05）
 - **做法**：`/messages/{id}/feedback` 已有端点——把反馈回流成评测数据集/重排信号；建立离线评测指标基线（接 B2）。语料仍限基准日志。
@@ -201,7 +204,7 @@
   - [x] 反馈回流成评测数据集（👍 → 问题 + gold；DB 集成测试验证派生正确）
   - [x] 反馈回流成重排信号（被引文档净分；opt-in 在线重排，单测验证温和上浮不喧宾夺主）
   - [x] 离线 recall@k 基线 + 历史趋势（接 B2，落 eval_runs）
-  - [ ] live 真栈：真实客服流量积累反馈后的重排 A/B 效果（需 serving 栈 + 真实用量）
+  - [x] live 真栈（2026-06-08）：积累真实 👍 反馈后开 `RAG_RERANK_FEEDBACK`，同一 query 'p95 ttft serving' 下被赞文档由 raw cosine #3/#4 被净分加权顶到 reranked #1/#2（离线 /rag/eval 仍用 raw 检索避免泄漏）— `docs/e2e-evidence/11-e2-rerank-ab.txt`
 
 ### E3 — 模型路由 / A-B / 影子流量 【L】 ✅ 已完成（2026-06-05）
 - **做法**：借 AIBrix 路由做多模型/多版本灰度、影子流量对比；与 C1（版本）、A1（发布）联动，形成「注册 → 灰度发布 → 评测 → 全量/回滚」闭环。
@@ -215,7 +218,7 @@
   - [x] 加权 A/B 路由 + 全量/回滚闭环（DB 集成测试：创建 → 路由 → 样本 → stats → promote → rollback）
   - [x] 影子流量镜像（默认关；开启后镜像不回客户端、只采对照指标）
   - [x] 与 C1（版本覆盖 `variant.model`）、A1（全量/回滚同语义）联动
-  - [ ] live 真栈：AIBrix 网关侧多副本灰度的端到端联调（需 serving 栈）
+  - [x] live 真栈（2026-06-08）：经 AIBrix 多副本网关跑加权 canary 80/20（stable 18 / canary 2）+ 影子镜像全量（20/20，主路不受影响）+ promote→canary 100%（promote 后 12 个请求全进 canary）— `docs/e2e-evidence/12-e3-canary-shadow.txt`
 
 ---
 
