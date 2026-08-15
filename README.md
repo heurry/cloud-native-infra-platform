@@ -1,18 +1,20 @@
 <p align="center">
-  <img src="docs/images/icon.png" alt="CloudNative Infra Platform logo" width="128" height="128" />
+  <img src="docs/images/icon.png" alt="TwinForge logo" width="128" height="128" />
 </p>
 
-<h1 align="center">CloudNative Infra Platform</h1>
+<h1 align="center">Cloud-Native Infrastructure Management Platform（TwinForge）</h1>
 
-[![CI](https://github.com/heurry/cloud-native-infra-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/heurry/cloud-native-infra-platform/actions/workflows/ci.yml)
+[![CI](https://github.com/heurry/TwinForge/actions/workflows/ci.yml/badge.svg)](https://github.com/heurry/TwinForge/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 ![Go](https://img.shields.io/badge/Go-1.22-00ADD8?logo=go&logoColor=white)
 ![Node](https://img.shields.io/badge/Node-20-339933?logo=node.js&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
 
-面向云原生微服务场景的分布式基础设施管理平台，统一提供配置中心、服务治理、元数据管理、可观测监控、CI/CD 自动化、弹性扩缩容、分层存储与 AI 运维分析能力。
+面向云原生微服务场景的分布式基础设施管理平台，提供配置管理、服务治理、可观测监控、CI/CD 自动化、弹性扩缩容和 AI 运维分析能力，支持平台工程师在统一控制台完成服务管理、资源观测、发布追踪和故障诊断。当前以单机双 RTX 3090 上的 LLM 训练与推理栈为主要实验场景：Qwen3.5-4B 的 LoRA/SFT 训练编排，Qwen3.6-27B FP8 / AWQ W4A16 版本的可复现 TTFT/TPOT 优化实验，模型服务经 Gateway / vLLM 统一接入平台治理。
 
-> **项目状态**：本仓库为演示 / 作品集级别的平台实现，端到端可运行；部分链路（AIBrix/vLLM、GPU、minikube 集群）依赖本地环境，在普通机器上可按需跳过。
+> **项目状态**：推理侧已完成 DianJin 客服数据构建、27B-FP8 Profiling，以及 128 样本校准的 AWQ W4A16 转换与双卡 serving。AWQ 正式矩阵覆盖 1K/2K x 1--16 并发；共享前缀暖缓存口径下 Prefix Cache 使平均 P95 TTFT -70.0%、P95 TPOT -46.8%，保守首次复用口径下 1K/2K TTFT 分别 -30.4%/-64.7%，全部请求通过成功率与输出质量门禁。调度扫描保留 `8/4096`，TP1 和高活跃序列候选因 OOM 或 TPOT 退化被淘汰。AIOps 已接入推理与训练证据、vLLM 日志签名、规则归因和 Incident 关联。仓库不预填或伪造性能数字。
+>
+> 推理优化的任务边界、实验矩阵、阶段验收见 [`docs/INFERENCE-OPTIMIZATION-EXECUTION.md`](docs/INFERENCE-OPTIMIZATION-EXECUTION.md)。
 
 ![平台总览界面](docs/images/dashboard.png)
 
@@ -23,8 +25,9 @@
 ```text
 React / Vite Console
   -> Go Control Plane API (:8081)   ← single entry; every /api is Go-native
+       ├─ Kubeflow PyTorchJob / datasets / model registry / training artifacts
+       ├─ vLLM endpoints / DianJin benchmark matrix / TTFT / TPOT / quality gates
        ├─ Config / deployments / incidents / audit / metrics / platform overview
-       ├─ Models / proxy / benchmarks / knowledge (pgvector RAG) / evals / chat
        ├─ Kubernetes snapshot via client-go + Go Agent (:8090)
        └─ /api/ai/* -> Python AI Service (:8200, diagnose + LLM/embed)
 
@@ -33,16 +36,43 @@ Redis backs cache / rate-limit / idempotency; MinIO holds benchmark & eval artif
 AIBrix / vLLM provide OpenAI-compatible model serving for AIOps and benchmark flows.
 ```
 
-## 核心能力
+## 核心能力（四层）
+
+### 基础管理层
+
+- 配置中心：配置项创建、版本管理、发布回滚和审计追踪全链路落库，配置变更全程可追溯。
+- 元数据管理：统一管理服务实例、部署记录、运行状态和故障事件等平台元数据；模型注册中心支持版本血缘、LoRA / 标签、训练产物归档与运行时实例绑定。
+- 分层存储：Redis 热数据 + PostgreSQL 关系数据 + MinIO 对象存储；指标 / 审计按配置中心保留期自动归档 PG→MinIO，冷数据可预签名回环。
+- 平台设置：API、Agent、AI Service 健康探测与本地配置编辑。
+
+### 服务治理层
+
+- 统一接入：微服务、模型服务和网关服务经同一注册中心接入——注册、心跳、注销、健康检查与 TTL reaper。
+- 实例与路由：服务实例状态展示、Gateway / vLLM 路由信息查看，以及按 OTel span 派生的实时调用图（连线粗细 = 真实 QPS）。
+- 调用指标：请求量、QPS、成功率等调用指标实时统计。
+- 扩缩容管理：真实 scale + 建 / 删 HPA；写操作受 `ALLOW_K8S_WRITES` 与命名空间允许名单守卫（越权写返回 403）。
+
+**模型服务场景**（服务治理的具体实例）：
+
+- 训练微调：Kubeflow `PyTorchJob` 下发 Qwen3.5-4B LoRA/SFT 任务，跟踪状态、日志和训练产物并自动注册模型版本。
+- 推理优化：面向 Qwen3.6-27B-FP8 与 AWQ W4A16 构建 1K/2K × 1--16 并发矩阵，采集 TTFT、TPOT、P95、吞吐、成功率、质量门禁和 GPU 快照。
+- 性能归因：归档 PyTorch Profiler trace 和 vLLM iteration/MFU/KV 指标，定位双卡 PCIe NCCL all-reduce 与 3090 Marlin FP8 GEMM 为主要 kernel 瓶颈。
+- 调度档位：AWQ 默认 `max_num_seqs=8,max_num_batched_tokens=4096`；`16/8192` 仅保留为 FP8 的高并发权衡档，AWQ 实测因 TPOT 退化未采纳。
+- 实验数据：从 MIT 许可的 `DianJin/DianJin-CSC-Data` 生成固定 seed 的共享前缀压测集，记录 tokenizer、数据哈希和参考回复。
+- 实验通道：训练微调与推理实验串行运行；训练页可提交/取消任务，推理页可分别启动/停止 vLLM 服务与压测任务，后端执行互斥校验。
+- 瓶颈归因：按 prefill、decode、显存压力、调度饱和、稳定性和质量退化输出证据与下一轮参数建议。
+
+### 可观测与发布层
 
 - 平台总览：健康分、服务状态、活跃告警、集群 Pod 和关键指标聚合。
-- 配置中心：配置项、版本发布、回滚和审计链路。
-- 服务治理：模型服务实例、运行时健康、Gateway / vLLM 路由状态。
-- 发布流水线：发布记录、Canary 状态、回滚入口和 SLO / Benchmark 门禁。
-- 可观测监控：请求延迟、TTFT、吞吐、主机资源、GPU、cAdvisor 和 Kubernetes 快照。
-- 知识库 / RAG：基准测试日志入库、pgvector 向量检索、索引重建和检索增强问答（Go 原生）。
-- AI Ops：Go 聚合证据，Python AI Service 生成根因、影响面、证据和建议动作。
-- 设置页：API、Agent、AI Service 健康探测和本地配置编辑。
+- 指标接入：节点、容器、服务实例、GPU 资源和请求链路统一接入（OTel + Tempo，一条 `/api/ai/chat:stream` 出 37-span 跨服务瀑布）。
+- 统一展示：请求延迟、TTFT、错误率、吞吐和资源占用（主机 / GPU / cAdvisor / Kubernetes 快照）。
+- CI/CD 与灰度发布：发布记录、Canary 状态、发布检查（SLO / Benchmark 门禁）和回滚入口；部署真改 Deployment 镜像并轮询滚动状态，坏镜像被 k8s `ProgressDeadlineExceeded` 检出后自动回滚上一版（零停机，2 条审计）。
+
+### AIOps 分析层
+
+- 知识资产分层管理：配置文件、模型文件、运行日志与诊断知识库（pgvector RAG；反馈重排默认关、可开关）。
+- 故障诊断：结合 RAG、监控指标、配置变更和历史事件生成故障原因、影响范围、证据链和处理建议；支持 agentic 模式——LLM 经 vLLM 工具调用多轮自主取证后下结论。
 
 ## 真栈端到端联调（2026-06-08）
 
@@ -100,6 +130,8 @@ Compose 会启动：
 - Go control plane `:8081`
 - Python AI Service `:8200`
 - Go Agent `:8090`
+
+Go Agent 通过只允许固定镜像、模型路径和参数集的 Docker Engine API 管理 Qwen3.6 推理 workload；Compose 会挂载 `/var/run/docker.sock`，仅建议在本机受信环境使用。
 
 > 这一步即可独立运行：AI 服务回退 stub、k8s / 指标链路降级，不阻塞启动。需要真实模型推理见下方「3. 完整本地栈」——届时改用 `scripts/run_full_stack.sh` 拉起 Go 应用层（内置启动顺序预检）。
 
