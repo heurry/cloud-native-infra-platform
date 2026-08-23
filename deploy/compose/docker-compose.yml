@@ -70,8 +70,23 @@ services:
       AGENT_BASE_URL: http://host.docker.internal:8090
       # 5B.1：控制面 client-go 直读集群（kubeconfig 内嵌证书；server 指向 minikube API）。
       KUBECONFIG: /etc/kubeconfig
+      # Kubernetes 写能力默认关闭；本地 E2E 可显式
+      # ALLOW_K8S_WRITES=true K8S_WRITE_NAMESPACES=default 启用受限写入。
+      ALLOW_K8S_WRITES: ${ALLOW_K8S_WRITES:-false}
+      K8S_WRITE_NAMESPACES: ${K8S_WRITE_NAMESPACES:-default}
+      # 本地实验环境显式启用 PyTorchJob；仍只允许 training 命名空间。
+      ALLOW_TRAINING: "true"
+      TRAINING_NAMESPACES: training
+      TRAINING_HOST_PATH: /opt/twinforge
+      TRAINING_MOUNT_PATH: /opt/twinforge
+      TRAINING_ARTIFACT_SECRET: training-artifacts
+      TRAINING_OUTPUT_ROOT: /opt/twinforge/artifacts/training
       # 新 AI 服务（结构化诊断 / chat:stream / embed）在同一 compose 网络内。
       AI_SERVICE_BASE_URL: http://python-ai-service:8200
+      # GitHub Actions 控制台集成；未配置 token 时 API 会明确返回 configured=false。
+      GITHUB_REPOSITORY: ${GITHUB_REPOSITORY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_WORKFLOW_FILE: ${GITHUB_WORKFLOW_FILE:-ci.yml}
       # cAdvisor 由 scripts/start_cadvisor_observability.sh 在宿主 18080 做 port-forward。
       CADVISOR_URL: http://host.docker.internal:18080/metrics
       # 5B.4a：Redis 横切（缓存 / 限流 / 幂等）；空则全降级。
@@ -81,6 +96,8 @@ services:
       S3_ACCESS_KEY: minioadmin
       S3_SECRET_KEY: minioadmin
       S3_BUCKET: infra-artifacts
+      # Serving benchmark 使用仓库内固定清洗切片，避免容器回退到内置短 prompt。
+      BENCHMARK_DATASET_PATH: /datasets/dianjin_csc_benchmark.jsonl
       # D1：全链路 trace 导出。默认空=关（/metrics 始终开）；启用方式见下方 observability profile。
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_EXPORTER_OTLP_INSECURE: "true"
@@ -92,6 +109,7 @@ services:
     volumes:
       # 内嵌证书的 kubeconfig（server: https://192.168.49.2:8443）；供控制面 client-go 直读。
       - ./.secrets/kubeconfig:/etc/kubeconfig:ro
+      - ../../data/cleaned/dianjin_csc_benchmark.jsonl:/datasets/dianjin_csc_benchmark.jsonl:ro
     networks:
       - default
       # 接入 minikube 外部网络，使容器可达集群 API（192.168.49.2:8443）。
@@ -111,7 +129,7 @@ services:
       dockerfile: Dockerfile
     environment:
       # 默认 auto：试 live，失败回退 stub。无 GPU 环境可设 AI_STUB_MODE=on 强制确定性 stub。
-      AI_STUB_MODE: auto
+      AI_STUB_MODE: ${AI_STUB_MODE:-auto}
       AI_LLM_BASE_URL: http://host.docker.internal:8010/v1
       AI_LLM_MODEL: qwen3-4b-customer
       # D1：延续 Go 控制面的 traceparent 并向 vLLM 继续传播（默认空=关）。
@@ -144,10 +162,18 @@ services:
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: utility
       LD_LIBRARY_PATH: /nvidia/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64
+      # 固定白名单 vLLM workload 的生命周期控制；不接受任意镜像、路径或命令。
+      INFERENCE_CONTROL_ENABLED: "true"
+      INFERENCE_VLLM_IMAGE: local/vllm-openai:qwen35-v0.19.1
+      INFERENCE_MODEL_PATH: /mnt/nvme-data/models/LLM_model/Qwen3.6-27B-FP8
+      INFERENCE_CACHE_PATH: /mnt/nvme-data/LLM/llm_train_platform_miniv2/.cache/vllm/qwen36-27b-fp8
+      INFERENCE_CONTAINER_NAME: twinforge-vllm-qwen36
     volumes:
       # Docker GPU runtime 异常时的本地兜底：让 Agent 可直接调用宿主 nvidia-smi/NVML。
       - /usr/bin/nvidia-smi:/host/usr/bin/nvidia-smi:ro
       - /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:/nvidia/lib/libnvidia-ml.so.1:ro
+      # Node Agent 通过 Docker Engine API 管理固定推理 workload。
+      - /var/run/docker.sock:/var/run/docker.sock
     privileged: true
 
   # ===== D1：全链路可观测栈（profile=observability，按需启用，不影响默认 up）=====

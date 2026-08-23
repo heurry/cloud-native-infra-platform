@@ -13,6 +13,7 @@ import type { ArchiveManifest, ArchiveRunResult, StorageTiers } from "../types/s
 import type { CallGraph } from "../types/topology";
 import type { RoutingPolicy, RoutingPolicyDetail, RoutingPolicyList, RoutingStats, SavePolicyInput } from "../types/routing";
 import type { DocSignalList, FeedbackDataset, RagEvalHistory, RagEvalResult } from "../types/feedback";
+import type { SubmitTrainingInput, TrainingJobsList, TrainingKubernetesDetail, TrainingLogs } from "../types/training";
 
 const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -258,6 +259,25 @@ export async function uploadModelArtifact(id: string, file: File): Promise<{ art
     });
   }
   return (await res.json()) as { artifact_uri: string; size: number };
+}
+
+// ===== Phase F：分布式训练（Kubeflow PyTorchJob） =====
+export function listTrainingJobs(): Promise<TrainingJobsList> {
+  return api<TrainingJobsList>("/api/training/jobs");
+}
+export function submitTrainingJob(
+  input: SubmitTrainingInput
+): Promise<{ id: string; name: string; namespace: string; status: string; registers_as?: string }> {
+  return api("/api/training/jobs", { method: "POST", body: JSON.stringify(input) });
+}
+export async function cancelTrainingJob(id: string): Promise<void> {
+  await api(`/api/training/jobs/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+export function trainingJobLogs(id: string): Promise<TrainingLogs> {
+  return api<TrainingLogs>(`/api/training/jobs/${encodeURIComponent(id)}/logs`);
+}
+export function trainingJobKubernetes(id: string): Promise<TrainingKubernetesDetail> {
+  return api<TrainingKubernetesDetail>(`/api/training/jobs/${encodeURIComponent(id)}/kubernetes`, { timeoutMs: 12_000 });
 }
 
 // ===== SSE 流式对话（AI Copilot） =====

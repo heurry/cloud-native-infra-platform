@@ -18,7 +18,7 @@ type Service struct{ pool *pgxpool.Pool }
 func NewService(pool *pgxpool.Pool) *Service { return &Service{pool: pool} }
 
 type traceRow struct {
-	pod, endpoint           *string
+	pod, endpoint, fallback *string
 	status                  string
 	total, ttft, generation *float64
 	inTok, outTok           *int64
@@ -30,7 +30,7 @@ func (s *Service) Current(ctx context.Context) (map[string]any, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT target_pod, endpoint_id, status,
 		       total_ms::float8, ttft_ms::float8, generation_ms::float8,
-		       input_tokens, output_tokens
+		       input_tokens, output_tokens, metadata->>'fallback_reason'
 		  FROM request_traces
 		 WHERE created_at >= now() - ($1 * interval '1 second')
 		 ORDER BY created_at DESC LIMIT 500`, windowSeconds)
@@ -42,7 +42,7 @@ func (s *Service) Current(ctx context.Context) (map[string]any, error) {
 	var rs []traceRow
 	for rows.Next() {
 		var r traceRow
-		if err := rows.Scan(&r.pod, &r.endpoint, &r.status, &r.total, &r.ttft, &r.generation, &r.inTok, &r.outTok); err != nil {
+		if err := rows.Scan(&r.pod, &r.endpoint, &r.status, &r.total, &r.ttft, &r.generation, &r.inTok, &r.outTok, &r.fallback); err != nil {
 			return nil, err
 		}
 		rs = append(rs, r)
@@ -97,7 +97,7 @@ func (s *Service) Current(ctx context.Context) (map[string]any, error) {
 		"target_pod_counts": counts(rs, func(r traceRow) string { return orUnknown(r.pod) }),
 		"endpoint_counts":   counts(rs, func(r traceRow) string { return orUnknown(r.endpoint) }),
 		"status_counts":     counts(rs, func(r traceRow) string { return statusKey(r.status) }),
-		"fallback_counts":   map[string]any{"none": n},
+		"fallback_counts":   counts(rs, func(r traceRow) string { return fallbackKey(r.fallback) }),
 		"target_pod_stats":  groupStats(rs, func(r traceRow) string { return orUnknown(r.pod) }),
 		"endpoint_stats":    groupStats(rs, func(r traceRow) string { return orUnknown(r.endpoint) }),
 	}, nil
@@ -133,7 +133,7 @@ func (s *Service) RecentRequests(ctx context.Context, limit int) ([]map[string]a
 	rows, err := s.pool.Query(ctx, `
 		SELECT request_id, session_id, endpoint_id, target_pod, model_id,
 		       retrieval_ms::float8, generation_ms::float8, total_ms::float8, ttft_ms::float8,
-		       input_tokens, output_tokens, status, error, created_at
+		       input_tokens, output_tokens, status, error, metadata->>'fallback_reason', created_at
 		  FROM request_traces ORDER BY created_at DESC LIMIT $1`, limit)
 	if err != nil {
 		return nil, err
@@ -142,12 +142,12 @@ func (s *Service) RecentRequests(ctx context.Context, limit int) ([]map[string]a
 	out := []map[string]any{}
 	for rows.Next() {
 		var requestID, status string
-		var sessionID, endpoint, pod, modelID, errMsg *string
+		var sessionID, endpoint, pod, modelID, errMsg, fallbackReason *string
 		var retrieval, generation, total, ttft *float64
 		var inTok, outTok *int64
 		var createdAt time.Time
 		if err := rows.Scan(&requestID, &sessionID, &endpoint, &pod, &modelID,
-			&retrieval, &generation, &total, &ttft, &inTok, &outTok, &status, &errMsg, &createdAt); err != nil {
+			&retrieval, &generation, &total, &ttft, &inTok, &outTok, &status, &errMsg, &fallbackReason, &createdAt); err != nil {
 			return nil, err
 		}
 		out = append(out, map[string]any{
@@ -155,7 +155,7 @@ func (s *Service) RecentRequests(ctx context.Context, limit int) ([]map[string]a
 			"target_pod": pod, "model_id": modelID, "retrieval_ms": retrieval,
 			"generation_ms": generation, "total_ms": total, "ttft_ms": ttft,
 			"input_tokens": inTok, "output_tokens": outTok, "status": status,
-			"error": errMsg, "created_at": createdAt.UTC().Format(time.RFC3339Nano),
+			"error": errMsg, "fallback_reason": fallbackReason, "created_at": createdAt.UTC().Format(time.RFC3339Nano),
 		})
 	}
 	return out, rows.Err()
@@ -268,6 +268,13 @@ func statusKey(s string) string {
 		return "unknown"
 	}
 	return s
+}
+
+func fallbackKey(value *string) string {
+	if value == nil || *value == "" {
+		return "none"
+	}
+	return *value
 }
 
 func tsOrNil(t *time.Time) any {

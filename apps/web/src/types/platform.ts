@@ -1,3 +1,67 @@
+import type { SparkTone } from "./ui";
+
+// 控制台行视图模型（由真实 API 派生；曾散落在 data/platformSnapshots）。
+export type ServiceConsoleRow = {
+  id: string;
+  name: string;
+  runtime: string;
+  model: string;
+  status: "正常" | "降级" | "异常";
+  replicas: string;
+  qps: number;
+  p95: number;
+  errorRate: number;
+  cpu: number;
+  gpu: number;
+  tone: SparkTone;
+  trend: number[];
+};
+
+export type KubernetesWorkloadRow = {
+  id: string;
+  name: string;
+  kind: string;
+  namespace: string;
+  replicas: string;
+  desired: number;
+  availability: number;
+  status: "正常" | "异常" | "警告";
+};
+
+export type BenchmarkTaskRow = {
+  id: string;
+  name: string;
+  service: string;
+  version: string;
+  scenario: string;
+  context: string;
+  concurrency: string;
+  p95: string;
+  ttft: string;
+  tpot: string;
+  throughput: string;
+  successRate: string;
+  qualityRate: string;
+  errorRate: string;
+  status: string;
+  startedAt: string;
+  tone: SparkTone;
+};
+
+export type ModelRegistryRow = {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  version: string;
+  status: string;
+  env: string;
+  quality: number | null;
+  instances: number;
+  updatedAt: string;
+  source?: ServiceInstance;
+};
+
 export type ServiceInstance = {
   name: string;
   base_url: string;

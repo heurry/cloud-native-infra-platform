@@ -222,6 +222,26 @@
 
 ---
 
+## Phase F · 训练侧：Kubeflow 分布式训练【L】（详细落地方案见 `docs/KUBEFLOW-TRAINING-PLAN.md`）
+
+- **目标**：补上 MLOps 链路最前端的「训练」，闭环 **训练 → 注册(C1) → 服务(vLLM/AIBrix) → 观测(D1) → 评测(E2) → 灰度/回滚(A1/E3)**。当前链路从"注册"开始（产物手动上传），训练把最前端补齐。
+- **总体判断**：控制面编排层与现有 client-go CRD 读写 / `deploy_runner` 异步轮询 / `k8sWriteGuard` 安全模型 / C1 产物落库**同款套路**，好加；真·分布式执行难点在 GPU/多节点（硬件），非平台代码。C1 字段（`base_model/lora_adapter/parent_version/artifact_uri/tags`）正是训练产物的形状，集成点几乎预留好了。
+- **做法（分阶段，每阶段可独立演示）**：
+  - F1（T0）✅ 已实现（2026-06-09）：只装 Kubeflow **Training Operator**（standalone，不上 Istio/Pipelines/Katib 全家桶；`deploy/kubeflow/`）+ 新包 `internal/training` 用 dynamic client 操作 `PyTorchJob`（`client.go` + 单测）+ 新 `ALLOW_TRAINING` flag/`TRAINING_NAMESPACES` 命名空间守卫（复用 `guardNamespace`，serving 命名空间硬禁）+ main 接线优雅降级。Docker（golang:1.22）build+test 绿。【S-M】
+  - F2（T1）✅ 已实现（2026-06-09）：迁移 `000012_training_jobs`（hand-pgx，同 chat/knowledge）+ store `training.go` + job 生命周期 API（`POST/GET /api/training/jobs`、`GET/DELETE /jobs/{id}`、`GET /jobs/{id}/logs`）+ `training_runner.go`（镜像 `deploy_runner.go`：提交 PyTorchJob→轮询相位/副本进度写 metadata→成败回写 status+审计）+ `k8s.PodLogs`。写经 `trainingWriteGuard`。记录态零 GPU 即可演示编排。Docker build+vet+test 绿。【M】
+  - F3（T2）训练镜像（HF Transformers + PEFT/LoRA + `torchrun`，数据集/产物经 MinIO）+ 真 LoRA 微调，留证 `docs/e2e-evidence/`。【M，GPU 约束】
+  - F4（T3）✅ 已实现（2026-06-09，用户口径「F3」）：训练成功 runner `finishTraining`→`RegisterModelVersion` **自动注册 C1**（血缘指回 base_version、记录 artifact_uri、回填 `model_version_id`；重复 (model_id,version) 唯一冲突跳过不致失败），即可被 E3 canary / A1 rollout 消费——全链路闭环。Docker build 绿。【S】
+  - F5（T4）✅ 已实现（2026-06-09，用户口径「F4」）：前端「模型训练」页（`pages/TrainingPage.tsx` + `lib/useTraining.ts` + `components/training/{SubmitTrainingDrawer,TrainingJobsPanel}` + `styles/67-training.css`）：提交抽屉 + 任务列表 live 相位/副本进度 + 事件 + Pod 日志拉取 + 取消 + 注册版本跳转；导航/路由/CSS 已接。npm build 绿。【M】
+  - F6（T5，可选）训练前 GPU 健康门禁（避开 NotReady/过热节点）+ cordon/uncordon 真写——把现状缺失的「GPU 节点故障恢复」从 0 补到有。【S-M】
+- **资源 / 显存划分（配合模型瘦身——本次已先行调整）**：
+  - **serving 与训练都切到 Qwen3-1.7B**（本地已有权重；4B 太占显存，无法与训练共置）。
+  - vLLM `--gpu-memory-utilization` 已**从 0.90 降到 0.60**（不再启动即预占满 VRAM）——改在 `deploy/aibrix/vllm-qwen35-4b-deployment.yaml` + `configs/serve/*.yaml`。切到 1.7B 后目标划分 **serving ≈ 0.40 / 训练 ≈ 0.50 / 缓冲 ≈ 0.10**（具体值按实际 GPU VRAM 调）。
+  - 训练与 serving 抢卡：训练前可 scale 掉一个 vLLM 副本（复用 A2 `ScaleDeployment`）腾卡，训练完扩回。
+- **验收**：见 `docs/KUBEFLOW-TRAINING-PLAN.md` 各阶段五要素；快速出彩 = F1+F2+F4+F5 演示「提交训练 → 注册 → 可服务」编排闭环，F3 真跑一次 LoRA 锦上添花。
+- **诚实边界**：编排真实、production-grade；真·规模化分布式受单节点 minikube + GPU 共享限制（演示 1–2 卡 LoRA），多节点 DDP/FSDP 需更大集群——口径同 A2 的「HPA 随真实负载自动伸缩」诚实边界。
+
+---
+
 ## 推荐执行顺序
 
 1. ~~**B1 + B2**（纯前端、后端已就绪）→ 立刻补上「做了没露出」，演示面最快变厚。~~ ✅ 已完成

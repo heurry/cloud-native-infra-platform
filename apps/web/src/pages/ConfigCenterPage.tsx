@@ -9,6 +9,7 @@ import {
   MoreVertical,
   Plus,
   RefreshCw,
+  Rocket,
   RotateCcw,
   Search,
 } from "lucide-react";
@@ -16,11 +17,11 @@ import {
 import { KpiGrid, PageHeader, PanelHeader } from "../components/common/PlatformPrimitives";
 import { EmptyState, ErrorState, QueryBoundary, Skeleton, describeError } from "../components/common/FeedbackStates";
 import { Drawer, DrawerField } from "../components/common/Drawer";
-import { configSnapshot, type ConfigConsoleRow } from "../data/platformSnapshots";
 import { api } from "../lib/api";
 import { fmt, relativeTime } from "../lib/format";
+import { useGoToPage } from "../lib/useGoToPage";
 import { cn } from "../lib/utils";
-import type { ConfigItem, ConfigVersion, ConfigVersionsResponse } from "../types/ops";
+import type { ConfigConsoleRow, ConfigItem, ConfigVersion, ConfigVersionsResponse } from "../types/ops";
 import type { KpiItem } from "../types/ui";
 
 type AuditEventLite = { id: string; action: string; resource_id: string | null; created_at: string };
@@ -78,16 +79,6 @@ export function ConfigCenterPage() {
           </button>
         }
       />
-
-      <div className="config-process-ribbon">
-        {configSnapshot.process.map((step, index) => (
-          <div className={cn("config-process-step", index === 1 && "active")} key={step.title}>
-            <span>{String(index + 1).padStart(2, "0")}</span>
-            <strong>{step.title}</strong>
-            <small>{step.detail}</small>
-          </div>
-        ))}
-      </div>
 
       <KpiGrid className="config-kpi-strip" items={kpis} />
 
@@ -259,6 +250,7 @@ function ConfigTableRow({ item, onOpen }: { item: ConfigConsoleRow; onOpen: () =
 
 function ConfigItemDrawer({ item, onClose }: { item: ConfigItem; onClose: () => void }) {
   const qc = useQueryClient();
+  const goTo = useGoToPage();
   const [content, setContent] = useState("");
   const [reason, setReason] = useState("");
 
@@ -298,6 +290,20 @@ function ConfigItemDrawer({ item, onClose }: { item: ConfigItem; onClose: () => 
     onError: (e) => toast.error(`回滚失败：${describeError(e)}`)
   });
 
+  const launchKind = configLaunchKind(item.config_key);
+  const useInWorkbench = (version: number) => {
+    if (!launchKind) return;
+    onClose();
+    goTo(launchKind === "training" ? "training" : "benchmarks", {
+      deliveryKind: launchKind,
+      configItemId: item.id,
+      configVersion: String(version),
+      trainingJobId: null,
+      benchmarkRunId: null,
+      deploymentId: null,
+    });
+  };
+
   return (
     <Drawer
       open
@@ -306,6 +312,14 @@ function ConfigItemDrawer({ item, onClose }: { item: ConfigItem; onClose: () => 
       onClose={onClose}
     >
       <DrawerField label="活跃版本" value={`v${versionsQuery.data?.active_version ?? item.active_version}`} />
+
+      {launchKind ? <div className="drawer-section">
+        <h4>用于工作台</h4>
+        <p>配置中心只维护不可变版本。进入{launchKind === "training" ? "训练" : "推理优化"}工作台后再确认资源状态并启动，任务会自动记录配置引用。</p>
+        <button className="infra-action-btn" type="button" onClick={() => useInWorkbench(versionsQuery.data?.active_version ?? item.active_version)}>
+          <Rocket size={14} /> 使用当前 v{versionsQuery.data?.active_version ?? item.active_version}
+        </button>
+      </div> : null}
 
       <div className="drawer-section">
         <h4>发布新版本</h4>
@@ -344,6 +358,7 @@ function ConfigItemDrawer({ item, onClose }: { item: ConfigItem; onClose: () => 
                   active={v.version === data.active_version}
                   onRollback={() => rollbackMutation.mutate(v.version)}
                   rollingBack={rollbackMutation.isPending}
+                  onUse={launchKind ? () => useInWorkbench(v.version) : undefined}
                 />
               ))}
             </ul>
@@ -358,12 +373,14 @@ function VersionRow({
   v,
   active,
   onRollback,
-  rollingBack
+  rollingBack,
+  onUse,
 }: {
   v: ConfigVersion;
   active: boolean;
   onRollback: () => void;
   rollingBack: boolean;
+  onUse?: () => void;
 }) {
   return (
     <li className="version-item">
@@ -376,11 +393,23 @@ function VersionRow({
             <RotateCcw size={13} /> 回滚到此版本
           </button>
         ) : null}
+        {onUse ? (
+          <button className="link-btn" type="button" onClick={onUse}>
+            <Rocket size={13} /> 用于工作台
+          </button>
+        ) : null}
       </div>
       {v.change_reason ? <p className="version-reason">{v.change_reason}</p> : null}
       {v.content ? <pre className="version-content">{v.content}</pre> : null}
     </li>
   );
+}
+
+function configLaunchKind(key: string): "training" | "inference" | null {
+  const lower = key.toLowerCase();
+  if (lower.includes("train")) return "training";
+  if (lower.includes("infer") || lower.includes("serve") || lower.includes("vllm")) return "inference";
+  return null;
 }
 
 function CreateConfigDrawer({ onClose }: { onClose: () => void }) {

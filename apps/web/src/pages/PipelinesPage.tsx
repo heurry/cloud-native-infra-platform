@@ -15,17 +15,19 @@ import {
 import { Donut, KpiGrid, PageHeader, PanelHeader, StatusBadge } from "../components/common/PlatformPrimitives";
 import { describeError, EmptyState, ErrorState, Skeleton } from "../components/common/FeedbackStates";
 import { Drawer } from "../components/common/Drawer";
-import { pipelineSnapshot, type PipelineConsoleRow } from "../data/platformSnapshots";
 import { api } from "../lib/api";
 import { compactMeta, fmt, relativeTime, shortTime } from "../lib/format";
 import { cn } from "../lib/utils";
 import { useGoToPage } from "../lib/useGoToPage";
-import type { Deployment, DeploymentMeta } from "../types/ops";
+import type { Deployment, DeploymentMeta, PipelineConsoleRow } from "../types/ops";
 import type { KpiItem } from "../types/ui";
 
 const RUNNING = "running";
+type CIRun = { id: number; name: string; display_title: string; status: string; conclusion: string | null; html_url: string; head_branch: string; created_at: string };
+type CIRunsResponse = { configured: boolean; provider: string; repository?: string; workflow?: string; message?: string; runs: CIRun[] };
 
 export function PipelinesPage() {
+  const goTo = useGoToPage();
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -39,6 +41,19 @@ export function PipelinesPage() {
     queryKey: ["deployments"],
     queryFn: () => api<{ deployments: Deployment[] }>("/api/deployments"),
     refetchInterval: 8000
+  });
+  const ciQuery = useQuery({
+    queryKey: ["ci", "runs"],
+    queryFn: () => api<CIRunsResponse>("/api/ci/runs?limit=8"),
+    refetchInterval: 15000
+  });
+  const ciMutation = useMutation({
+    mutationFn: () => api("/api/ci/runs", { method: "POST", body: JSON.stringify({ ref: "main", operator: "frontend" }) }),
+    onSuccess: () => {
+      toast.success("GitHub Actions CI 已触发");
+      setTimeout(() => ciQuery.refetch(), 2000);
+    },
+    onError: (e) => toast.error(`CI 触发失败：${describeError(e)}`)
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["deployments"] });
@@ -91,24 +106,12 @@ export function PipelinesPage() {
   return (
     <section className="infra-page pipelines-page pipeline-replica">
       <PageHeader
-        title="发布流水线"
-        subtitle="自动化构建、测试、部署与回滚，保障发布质量与安全"
+        title="服务发布流水线"
+        subtitle="通用微服务的 GitHub Actions 构建测试、Kubernetes 发布检查与真实回滚；模型运行时由发布中心管理"
         actions={
-          <button className="console-refresh primary" onClick={() => setCreating(true)} type="button">
-            <Plus size={14} /> 新建流水线
-          </button>
+          <><button className="console-refresh" onClick={() => goTo("release")} type="button">模型发布中心</button><button className="console-refresh primary" onClick={() => setCreating(true)} type="button"><Plus size={14} /> 新建服务流水线</button></>
         }
       />
-
-      <div className="pipeline-process-ribbon">
-        {pipelineSnapshot.process.map((step, index) => (
-          <div className={cn("pipeline-process-step", index === 4 && "active")} key={step.title}>
-            <span>{String(index + 1).padStart(2, "0")}</span>
-            <strong>{step.title}</strong>
-            <small>{step.detail}</small>
-          </div>
-        ))}
-      </div>
 
       <KpiGrid className="pipeline-kpi-strip" items={kpis} />
 
@@ -186,6 +189,23 @@ export function PipelinesPage() {
         </section>
 
         <aside className="pipeline-side-stack">
+          <section className="infra-panel">
+            <PanelHeader title="CI / GitHub Actions" action={ciQuery.data?.configured ? ciQuery.data.repository : "待配置"} />
+            {ciQuery.isLoading ? <Skeleton rows={3} /> : ciQuery.isError ? <ErrorState error={ciQuery.error} onRetry={ciQuery.refetch} /> : !ciQuery.data?.configured ? (
+              <EmptyState title="CI 连接未配置" description={ciQuery.data?.message || "配置 GitHub Actions 连接后可从控制台触发并查看构建、测试结果。"} />
+            ) : <>
+              <button className="infra-action-btn" disabled={ciMutation.isPending} onClick={() => ciMutation.mutate()} type="button">
+                <CheckCircle size={14} /> {ciMutation.isPending ? "触发中..." : "运行 main CI"}
+              </button>
+              <div className="pipeline-ci-list">
+                {ciQuery.data.runs.length ? ciQuery.data.runs.map((run) => <a href={run.html_url} key={run.id} rel="noreferrer" target="_blank">
+                  <i className={cn(run.conclusion === "success" ? "success" : run.status === "in_progress" || run.status === "queued" ? "warning" : "danger")} />
+                  <span><strong>{run.display_title || run.name}</strong><small>{run.head_branch} · {relativeTime(run.created_at)}</small></span>
+                  <StatusBadge status={run.conclusion || run.status} />
+                </a>) : <EmptyState title="暂无 CI 运行" />}
+              </div>
+            </>}
+          </section>
           <section className="infra-panel">
             <PanelHeader title="环境分布" action={`${envDist.total} 条`} />
             {envDist.items.length === 0 ? (
@@ -422,8 +442,8 @@ function derivePipelineRows(deployments: Deployment[] | undefined): PipelineCons
       version,
       commit: compactMeta([item.metadata.branch, item.metadata.gate]) || "-",
       status,
-      stage: normalized === RUNNING ? "部署中" : normalized === "failed" ? "测试失败" : "已完成",
-      stageMeta: normalized === RUNNING ? "Rolling Update" : normalized === "failed" ? "Test Failed" : "Deployed",
+      stage: normalized === RUNNING ? "部署中" : normalized === "failed" ? "部署失败" : "已完成",
+      stageMeta: normalized === RUNNING ? "Rolling Update" : normalized === "failed" ? "Deploy Failed" : "Deployed",
       trigger: item.metadata.owner ?? "system",
       startedAt: item.started_at ? shortTime(item.started_at) : "-",
       duration: item.finished_at && item.started_at ? relativeTime(item.started_at) : "进行中",

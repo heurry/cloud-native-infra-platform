@@ -3,6 +3,9 @@ __pycache__/
 .codex
 .claude/
 .venv/
+.venv-awq/
+.venv.backup-*/
+.patch-work-*/
 node_modules/
 browser_extensions/
 screenshots/
@@ -19,8 +22,12 @@ logs/aibrix_4b/
 logs/full_stack/
 logs/observability/
 logs/runtime/
+logs/inference/
 logs/download_data_*.log
 logs/seqs*.log
+/logs/
+/artifacts/
+/.cache/
 *.pid
 errortxt
 知识积累.md
@@ -33,6 +40,11 @@ deploy/compose/.secrets/
 /test.py
 /package.json
 /package-lock.json
+/docs.zip
+/简历.zip
+/简历/
+/infra.txt
+/infra_ideal_plus_ai_system.txt
 /configs/train/
 /configs/data/
 /configs/model/

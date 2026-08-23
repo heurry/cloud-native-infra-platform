@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/heurry/cloudnative-infra-platform/server/internal/obs"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
@@ -51,6 +52,7 @@ type resolvedEndpoint struct {
 }
 
 func (a *API) proxyChatCompletions(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
 	endpointID := chi.URLParam(r, "endpoint_id")
 	body, err := io.ReadAll(io.LimitReader(r.Body, 16<<20))
 	if err != nil {
@@ -65,6 +67,10 @@ func (a *API) proxyChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	ep, status, err := a.resolveEndpoint(r.Context(), endpointID)
 	if err != nil {
+		go a.recordRequestTrace(requestTraceInput{
+			RequestID: requestIDFor(r), EndpointID: endpointID, ModelID: payloadString(payload, "model"),
+			TotalMs: msSince(started), Status: "error", Error: err.Error(), Metadata: map[string]any{"plane": "proxy"},
+		})
 		WriteError(w, r, status, errCodeForStatus(status), err.Error())
 		return
 	}
@@ -73,6 +79,11 @@ func (a *API) proxyChatCompletions(w http.ResponseWriter, r *http.Request) {
 	// 流式与非流式统一处理：无整体超时（SSE 长连），靠请求 context 取消。
 	resp, err := dispatchUpstream(r.Context(), ep, body, requestIDFor(r), r.Header.Get("Authorization"), payloadModel)
 	if err != nil {
+		obs.RecordServiceEdge(endpointID, "endpoint", ep.TargetPod, "serving", true)
+		go a.recordRequestTrace(requestTraceInput{
+			RequestID: requestIDFor(r), EndpointID: endpointID, TargetPod: ep.TargetPod, ModelID: modelFor("", payloadModel),
+			TotalMs: msSince(started), Status: "error", Error: err.Error(), Metadata: map[string]any{"plane": "proxy"},
+		})
 		WriteError(w, r, http.StatusBadGateway, "upstream_unreachable", "upstream endpoint unreachable: "+err.Error())
 		return
 	}
@@ -86,7 +97,24 @@ func (a *API) proxyChatCompletions(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("x-target-pod", ep.TargetPod)
 	w.Header().Set("x-routing-endpoint", endpointID)
 	w.WriteHeader(resp.StatusCode)
-	streamCopy(w, resp)
+	written := streamCopy(w, resp)
+	obs.RecordServiceEdge(endpointID, "endpoint", ep.TargetPod, "serving", resp.StatusCode < 200 || resp.StatusCode >= 400)
+	traceStatus := "ok"
+	traceError := ""
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+		traceStatus = "error"
+		traceError = http.StatusText(resp.StatusCode)
+	}
+	go a.recordRequestTrace(requestTraceInput{
+		RequestID: requestIDFor(r), EndpointID: endpointID, TargetPod: ep.TargetPod,
+		ModelID: modelFor(ep.ModelID, payloadModel), TotalMs: msSince(started), Status: traceStatus, Error: traceError,
+		Metadata: map[string]any{"plane": "proxy", "http_status": resp.StatusCode, "response_bytes": written},
+	})
+}
+
+func payloadString(payload map[string]any, key string) string {
+	value, _ := payload[key].(string)
+	return value
 }
 
 // requestIDFor 取入站 x-request-id，缺失时回退到 RequestID 中间件生成的值。

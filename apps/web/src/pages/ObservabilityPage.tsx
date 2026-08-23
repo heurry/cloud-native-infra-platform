@@ -26,6 +26,16 @@ type AlertRow = {
   status: string;
   triggered_at: string;
 };
+type PlatformLog = {
+  id: number | string;
+  timestamp: string | null;
+  level: string;
+  source: string;
+  resource_type: string;
+  resource_id: string;
+  message: string;
+  attributes: Record<string, unknown>;
+};
 
 type ServiceRow = {
   name: string;
@@ -70,6 +80,8 @@ export function ObservabilityPage() {
   const goTo = useGoToPage();
   const [activeTab, setActiveTab] = useState<ObsTab>("指标总览");
   const [query, setQuery] = useState("");
+  const [logNamespace, setLogNamespace] = useState("default");
+  const [logPod, setLogPod] = useState("");
   const [serviceFilter, setServiceFilter] = useState<string>(ALL_SERVICES);
   const [instanceFilter, setInstanceFilter] = useState<string>(ALL_INSTANCES);
   const [metricFilter, setMetricFilter] = useState<ObsMetricFilter>("延迟 (P95)");
@@ -95,6 +107,19 @@ export function ObservabilityPage() {
   const alertsQuery = useQuery({
     queryKey: ["alerts"],
     queryFn: () => api<{ alerts: AlertRow[]; summary: Record<string, number> }>("/api/alerts"),
+    refetchInterval: paused ? false : refreshMs
+  });
+  const logsQuery = useQuery({
+    queryKey: ["platform-logs", query, logNamespace, logPod],
+    queryFn: () => {
+      const params = new URLSearchParams({ limit: "300", q: query.trim() });
+      if (logPod.trim()) {
+        params.set("namespace", logNamespace.trim() || "default");
+        params.set("pod", logPod.trim());
+      }
+      return api<{ logs: PlatformLog[]; count: number; source?: string }>(`/api/logs?${params.toString()}`);
+    },
+    enabled: activeTab === "日志检索",
     refetchInterval: paused ? false : refreshMs
   });
 
@@ -191,12 +216,15 @@ export function ObservabilityPage() {
     setInstanceFilter(ALL_INSTANCES);
     setMetricFilter("延迟 (P95)");
     setGroupBy("服务");
+    setLogNamespace("default");
+    setLogPod("");
   };
   const refetchAll = () => {
     metricsQuery.refetch();
     historyQuery.refetch();
     tracesQuery.refetch();
     alertsQuery.refetch();
+    if (activeTab === "日志检索") logsQuery.refetch();
   };
   const showOverview = activeTab === "指标总览";
   const showTracing = activeTab === "请求追踪";
@@ -226,16 +254,6 @@ export function ObservabilityPage() {
           </button>
         }
       />
-
-      <div className="obs-process-ribbon">
-        {["发现问题", "定位对象", "分析原因", "推荐动作", "执行修复", "验证恢复"].map((label, index) => (
-          <div className={cn("obs-process-step", index === 0 && "active")} key={label}>
-            <span>{String(index + 1).padStart(2, "0")}</span>
-            <strong>{label}</strong>
-            <small>{index === 0 ? "指标监控" : index === 1 ? "服务/实例" : "SLO 验证"}</small>
-          </div>
-        ))}
-      </div>
 
       <KpiGrid className="obs-kpi-strip" items={kpis} />
 
@@ -293,8 +311,12 @@ export function ObservabilityPage() {
             </select>
           </label>
           <label className="obs-query-search"><Search size={13} />
-            <input onChange={(event) => setQuery(event.target.value)} placeholder="搜索 Trace / Label" value={query} />
+            <input onChange={(event) => setQuery(event.target.value)} placeholder={showLogs ? "搜索日志内容" : "搜索 Trace / Label"} value={query} />
           </label>
+          {showLogs ? <>
+            <label>Namespace<input aria-label="Pod Namespace" onChange={(event) => setLogNamespace(event.target.value)} placeholder="default" value={logNamespace} /></label>
+            <label>Pod（可选）<input aria-label="Pod 名称" onChange={(event) => setLogPod(event.target.value)} placeholder="留空查询平台索引" value={logPod} /></label>
+          </> : null}
           <button className="obs-reset" onClick={resetFilters} type="button">重置</button>
           <button className="obs-submit" onClick={refetchAll} type="button">查询</button>
         </div>
@@ -602,8 +624,23 @@ export function ObservabilityPage() {
 
         {showLogs ? (
           <section className="infra-panel obs-log-panel">
-            <PanelHeader title="日志检索" action="未接入" />
-            <EmptyState title="暂无日志数据" description="当前后端没有暴露日志检索 API" />
+            <PanelHeader title="日志检索" action={logsQuery.data ? `${logsQuery.data.count} 条 · ${logsQuery.data.source === "kubernetes" ? `${logNamespace}/${logPod}` : "平台索引"}` : "近 24 小时"} />
+            {logsQuery.isLoading ? <Skeleton rows={6} /> : logsQuery.isError ? (
+              <ErrorState error={logsQuery.error} onRetry={logsQuery.refetch} />
+            ) : !logsQuery.data?.logs.length ? (
+              <EmptyState title="暂无匹配日志" description={logPod ? `未读取到 ${logNamespace}/${logPod} 的匹配日志，请确认 Pod 名称与命名空间。` : "训练、推理、发布和主动健康检查执行后会自动写入统一日志索引；填写 Pod 可直接读取 Kubernetes 日志。"} />
+            ) : (
+              <div className="obs-log-table">
+                <div className="obs-log-row header"><span>时间</span><span>级别</span><span>来源</span><span>资源</span><span>消息</span></div>
+                {logsQuery.data.logs.map((log) => <div className="obs-log-row" key={log.id}>
+                  <time>{log.timestamp ? relativeTime(log.timestamp) : "实时"}</time>
+                  <StatusBadge status={log.level === "error" ? "严重" : log.level === "warning" ? "警告" : "正常"} />
+                  <strong>{log.source}</strong>
+                  <span title={`${log.resource_type}/${log.resource_id}`}>{log.resource_id || log.resource_type || "-"}</span>
+                  <code title={log.message}>{log.message}</code>
+                </div>)}
+              </div>
+            )}
           </section>
         ) : null}
 
@@ -748,7 +785,7 @@ function deriveSlowRequests(traces: RequestTrace[] | undefined): SlowRow[] {
     .slice(0, 5)
     .map((trace) => ({
       endpoint: trace.endpoint_id || "/v1/chat/completions",
-      service: trace.target_pod || "llm-chat-service",
+      service: trace.target_pod || "未绑定实例",
       p95: `${fmt(trace.total_ms ?? trace.generation_ms ?? 0, 0)}ms`,
       ratio: "实时",
     }));

@@ -72,6 +72,8 @@ type DiagnoseResult struct {
 	LatencyMs          *float64        `json:"latency_ms"`
 	Mode               string          `json:"mode"` // stub / live —— 便于排查无 GPU 时为何是假响应
 	Error              string          `json:"error"`
+	Category           string          `json:"category"`
+	Severity           string          `json:"severity"`
 }
 
 // Diagnose 调 Python 推理。任何网络/超时归 ErrUnreachable；非 2xx 归 ErrBadStatus；

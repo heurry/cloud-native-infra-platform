@@ -9,11 +9,14 @@ export type Page =
   | "evals"
   | "feedback"
   | "benchmarks"
+  | "release"
   | "config"
   | "pipelines"
+  | "datasets"
   | "models"
   | "routing"
   | "storage"
+  | "training"
   | "settings";
 
 export const pages: Page[] = [
@@ -27,30 +30,36 @@ export const pages: Page[] = [
   "evals",
   "feedback",
   "benchmarks",
+  "release",
   "config",
   "pipelines",
+  "datasets",
   "models",
   "routing",
   "storage",
+  "training",
   "settings"
 ];
 
 export const pageLabels: Record<Page, string> = {
   dashboard: "平台总览",
-  services: "模型服务",
+  services: "服务与 Workload",
   kubernetes: "Kubernetes",
   config: "配置中心",
-  pipelines: "发布流水线",
+  pipelines: "服务发布流水线",
   observability: "可观测性",
   aiOps: "AI Ops",
   knowledge: "知识库 / RAG",
   support: "智能客服",
   evals: "检索评测",
   feedback: "反馈回流",
-  benchmarks: "压测验证",
-  models: "模型注册",
+  benchmarks: "推理优化",
+  release: "发布中心",
+  datasets: "数据资产",
+  models: "模型与版本",
   routing: "模型路由",
   storage: "存储分层",
+  training: "训练微调",
   settings: "平台设置"
 };
 
@@ -69,9 +78,12 @@ export const pagePaths: Record<Page, string> = {
   evals: "/evals",
   feedback: "/feedback",
   benchmarks: "/benchmarks",
+  release: "/release",
+  datasets: "/datasets",
   models: "/models",
   routing: "/routing",
   storage: "/storage",
+  training: "/training",
   settings: "/settings"
 };
 

@@ -68,7 +68,7 @@ type variantStat struct {
 	Label     string  `json:"label"`
 	Endpoint  string  `json:"endpoint"`
 	Count     int64   `json:"count"`
-	Share     float64 `json:"share"`   // 占比 0..1
+	Share     float64 `json:"share"` // 占比 0..1
 	AvgMs     int     `json:"avg_ms"`
 	P95Ms     int     `json:"p95_ms"`
 	ErrorRate float64 `json:"error_rate"`
@@ -468,8 +468,9 @@ func (a *API) promoteRoutingVariant(w http.ResponseWriter, r *http.Request) {
 	}
 	a.Store.Audit(r.Context(), operator, "operator", "routing.promote", "routing_policy", name,
 		map[string]any{"label": req.Label})
+	deploymentID := a.recordRoutingDeployment(r.Context(), name, req.Label, operator, "promoted", cur.Variants, next)
 	pol, _ := a.loadRoutingPolicy(r.Context(), name)
-	WriteJSON(w, http.StatusOK, map[string]any{"policy": pol, "promoted": req.Label})
+	WriteJSON(w, http.StatusOK, map[string]any{"policy": pol, "promoted": req.Label, "deployment_id": nilIfEmpty(deploymentID)})
 }
 
 // POST /api/routing/policies/{name}/rollback —— 回滚到全量前的权重快照（metadata.prev_variants）。
@@ -510,6 +511,22 @@ func (a *API) rollbackRoutingPolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.Store.Audit(r.Context(), operator, "operator", "routing.rollback", "routing_policy", name, map[string]any{})
+	deploymentID := a.recordRoutingDeployment(r.Context(), name, "previous-weights", operator, "rolled_back", nil, prev)
 	pol, _ := a.loadRoutingPolicy(r.Context(), name)
-	WriteJSON(w, http.StatusOK, map[string]any{"policy": pol, "rolled_back": true})
+	WriteJSON(w, http.StatusOK, map[string]any{"policy": pol, "rolled_back": true, "deployment_id": nilIfEmpty(deploymentID)})
+}
+
+func (a *API) recordRoutingDeployment(ctx context.Context, policy, version, operator, phase string, previous, next []routingVariant) string {
+	meta := map[string]any{
+		"owner": operator, "mode": "routing_canary", "phase": phase, "routing_policy": policy,
+		"previous_variants": previous, "variants": next,
+	}
+	id, err := a.Store.CreateDeploymentMeta(ctx, "routing/"+policy, version, "prod", meta)
+	if err != nil {
+		return ""
+	}
+	_, _ = a.Store.FinishDeployment(ctx, id, "success")
+	_ = a.recordPlatformLog(ctx, platformLogInput{Level: "info", Source: "routing-controller", ResourceType: "deployment", ResourceID: id,
+		Message: "routing policy " + phase, Attributes: meta})
+	return id
 }

@@ -23,7 +23,7 @@ from aiservice.schemas import (
 )
 
 # stub 取证上限：最多调这么多工具就收口下结论（保证多轮但不无限）。
-STUB_MAX_TOOLS = 3
+STUB_MAX_TOOLS = 5
 
 
 def run_agent_step(req: AgentStepRequest, cfg: Config) -> AgentStepResponse:

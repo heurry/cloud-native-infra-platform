@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/heurry/cloudnative-infra-platform/server/internal/obs"
 )
 
 // E3 数据面：POST /api/routing/{policy}/v1/chat/completions。
@@ -74,6 +75,7 @@ type upstreamResult struct {
 }
 
 func (a *API) routedChatCompletions(w http.ResponseWriter, r *http.Request) {
+	totalStart := time.Now()
 	policyName := chi.URLParam(r, "policy")
 	body, err := io.ReadAll(io.LimitReader(r.Body, 16<<20))
 	if err != nil {
@@ -107,8 +109,14 @@ func (a *API) routedChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 	ep, status, err := a.resolveEndpoint(r.Context(), variant.Endpoint)
 	if err != nil {
+		obs.RecordServiceEdge(policyName, "routing-policy", variant.Endpoint, "serving", true)
 		// 落一条失败样本（status 0）后回写错误，便于灰度健康度观测。
 		a.recordRoutingSample(policyName, requestIDFor(r), variant, variant.Endpoint, upstreamResult{status: 0}, nil, routingTarget{})
+		go a.recordRequestTrace(requestTraceInput{
+			RequestID: requestIDFor(r), EndpointID: policyName, TargetPod: variant.Endpoint,
+			ModelID: modelFor(variant.Model, payloadModel), TotalMs: msSince(totalStart), Status: "error", Error: err.Error(),
+			Metadata: map[string]any{"plane": "routing", "variant": variant.Label},
+		})
 		WriteError(w, r, status, errCodeForStatus(status), err.Error())
 		return
 	}
@@ -131,7 +139,13 @@ func (a *API) routedChatCompletions(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	resp, err := dispatchUpstream(r.Context(), ep, rewriteModel(body, variant.Model), reqID, authz, primaryModel)
 	if err != nil {
+		obs.RecordServiceEdge(policyName, "routing-policy", ep.TargetPod, "serving", true)
 		a.collectAndRecord(policyName, reqID, variant, ep.TargetPod, upstreamResult{status: 0, latency: time.Since(start)}, shadowCh, shadowTarget)
+		go a.recordRequestTrace(requestTraceInput{
+			RequestID: reqID, EndpointID: policyName, TargetPod: ep.TargetPod, ModelID: primaryModel,
+			TotalMs: msSince(totalStart), QueueGatewayMs: float64(time.Since(start).Microseconds()) / 1000,
+			Status: "error", Error: err.Error(), Metadata: map[string]any{"plane": "routing", "variant": variant.Label},
+		})
 		WriteError(w, r, http.StatusBadGateway, "upstream_unreachable", "upstream endpoint unreachable: "+err.Error())
 		return
 	}
@@ -147,9 +161,22 @@ func (a *API) routedChatCompletions(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("x-target-pod", ep.TargetPod)
 	w.WriteHeader(resp.StatusCode)
 	written := streamCopy(w, resp)
+	obs.RecordServiceEdge(policyName, "routing-policy", ep.TargetPod, "serving", resp.StatusCode < 200 || resp.StatusCode >= 400)
 
 	a.collectAndRecord(policyName, reqID, variant, ep.TargetPod,
 		upstreamResult{status: resp.StatusCode, latency: time.Since(start), bytes: written}, shadowCh, shadowTarget)
+	traceStatus := "ok"
+	traceError := ""
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+		traceStatus = "error"
+		traceError = http.StatusText(resp.StatusCode)
+	}
+	go a.recordRequestTrace(requestTraceInput{
+		RequestID: reqID, EndpointID: policyName, TargetPod: ep.TargetPod, ModelID: primaryModel,
+		QueueGatewayMs: float64(time.Since(start).Microseconds()) / 1000, TotalMs: msSince(totalStart),
+		Status: traceStatus, Error: traceError,
+		Metadata: map[string]any{"plane": "routing", "variant": variant.Label, "http_status": resp.StatusCode, "response_bytes": written},
+	})
 }
 
 // shadowCall 把请求镜像到影子目标：独立 background context + 超时，读尽并丢弃响应、只采指标。

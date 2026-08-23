@@ -9,12 +9,20 @@ import { KpiGrid, PageHeader, PanelHeader, Sparkline, StatusBadge } from "../com
 import { EmptyState, ErrorState, Skeleton } from "../components/common/FeedbackStates";
 import { CallGraph } from "../components/topology/CallGraph";
 import { normalizeServiceInstance } from "../data/mockPlatformData";
-import { servicesSnapshot, type ServiceConsoleRow } from "../data/platformSnapshots";
 import { api, topologyGraph } from "../lib/api";
 import { compact, fmt, pct, relativeTime } from "../lib/format";
 import { cn } from "../lib/utils";
-import type { Metrics, MetricsHistorySample, ServiceInstance } from "../types/platform";
+import type { Metrics, MetricsHistorySample, ServiceConsoleRow, ServiceInstance } from "../types/platform";
 import type { KpiItem } from "../types/ui";
+
+// serving 架构示意的静态节点布局（坐标/标签）；状态色在运行时由真实 service_instances 健康派生。
+const servingTopology: Array<{ id: string; label: string; x: number; y: number }> = [
+  { id: "gateway", label: "AI Gateway", x: 12, y: 48 },
+  { id: "router", label: "AIBrix Router", x: 36, y: 48 },
+  { id: "vllm0", label: "vLLM-0", x: 66, y: 30 },
+  { id: "vllm1", label: "vLLM-1", x: 66, y: 66 },
+  { id: "cache", label: "Redis Cache", x: 90, y: 48 },
+];
 
 // "—" 占位：真实端点缺失/加载中时显示，不再用写死数字伪装成有数据（5A.1）。
 function show(value: number | null | undefined, format: (n: number) => string): string {
@@ -85,7 +93,7 @@ export function ServicesPage() {
       if (id === "vllm1") return vllms[1];
       return undefined;
     };
-    return servicesSnapshot.topology.map((node) => {
+    return servingTopology.map((node) => {
       const inst = pick(node.id);
       return { ...node, tone: inst ? tone(inst.status) : "info" };
     });

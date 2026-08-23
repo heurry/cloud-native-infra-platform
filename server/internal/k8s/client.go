@@ -9,6 +9,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"time"
@@ -190,6 +191,21 @@ func (c *Collector) ProxyGetPodMetrics(ctx context.Context, namespace, name, por
 		SubResource("proxy").
 		Suffix("metrics").
 		DoRaw(ctx)
+}
+
+// PodLogs 返回某 Pod 末 tailLines 行日志（Phase F：训练任务日志查看）。
+func (c *Collector) PodLogs(ctx context.Context, namespace, name string, tailLines int64) (string, error) {
+	stream, err := c.clientset.CoreV1().Pods(namespace).
+		GetLogs(name, &corev1.PodLogOptions{TailLines: &tailLines}).Stream(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer stream.Close()
+	b, err := io.ReadAll(stream)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 func (c *Collector) collectPods(ctx context.Context) ([]PodSnapshot, error) {

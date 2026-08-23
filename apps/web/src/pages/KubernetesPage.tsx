@@ -8,11 +8,9 @@ import { useK8sScaling } from "../lib/useK8sScaling";
 import { Donut, KpiGrid, PageHeader, PanelHeader, StatusBadge } from "../components/common/PlatformPrimitives";
 import { EmptyState, ErrorState, Skeleton } from "../components/common/FeedbackStates";
 import { WorkloadScaleDrawer, type ScaleTarget } from "../components/kubernetes/WorkloadScaleDrawer";
-import type { KubernetesWorkloadRow } from "../data/platformSnapshots";
 import { api } from "../lib/api";
 import { bytes, compact, fmt, shortTime } from "../lib/format";
-import { cn } from "../lib/utils";
-import type { K8sDeployment, K8sEvent, K8sNode, K8sPod, KubernetesSnapshot, Metrics } from "../types/platform";
+import type { K8sDeployment, K8sEvent, K8sNode, K8sPod, KubernetesSnapshot, KubernetesWorkloadRow, Metrics } from "../types/platform";
 import type { KpiItem } from "../types/ui";
 
 type ResourceTone = "info" | "success" | "warning" | "danger";
@@ -110,16 +108,6 @@ export function KubernetesPage() {
           </button>
         }
       />
-
-      <div className="k8s-process-ribbon">
-        {["发现问题", "定位对象", "分析原因", "推荐动作", "执行修复", "验证恢复"].map((label, index) => (
-          <div className={cn("k8s-process-step", index === 1 && "active")} key={label}>
-            <span>{String(index + 1).padStart(2, "0")}</span>
-            <strong>{label}</strong>
-            <small>{index === 1 ? "集群资源" : index === 0 ? "监控告警" : "健康检查"}</small>
-          </div>
-        ))}
-      </div>
 
       <KpiGrid className="k8s-kpi-strip" items={kpis} />
 

@@ -41,8 +41,10 @@ spec:
             - float16
             - --max-model-len
             - "4096"
+            # 显存上限：0.60（原 0.90）——避免启动即预占满 VRAM，给训练/共置留余量；
+            # 切 1.7B 后目标降到 ~0.40（见 docs/KUBEFLOW-TRAINING-PLAN.md §资源与显存划分）。
             - --gpu-memory-utilization
-            - "0.90"
+            - "0.60"
             - --max-num-seqs
             - "64"
             - --max-num-batched-tokens

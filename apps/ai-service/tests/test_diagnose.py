@@ -67,3 +67,114 @@ def test_deterministic():
     first = stub_diagnose(_req(evidence)).model_dump()
     second = stub_diagnose(_req(evidence)).model_dump()
     assert first == second
+
+
+def _inference_evidence(success_rate=1.0, quality_rate=1.0):
+    return {
+        "scope": "inference",
+        "inference": {
+            "benchmark": {
+                "run_id": "run-prefix",
+                "endpoint_id": "vllm-local",
+                "workload": "dianjin-csc",
+                "config": {"vllm": {"max_num_seqs": 8, "max_num_batched_tokens": 4096}},
+                "summary": {"scenarios": [
+                    {
+                        "context_length": 2048,
+                        "concurrency": 16,
+                        "success_rate": success_rate,
+                        "quality_gate_pass_rate": quality_rate,
+                        "p95_ttft_ms": 4200,
+                        "p95_tpot_ms": 72,
+                        "p95_ms": 8900,
+                        "gpu_after": {"max_memory_utilization_percent": 90},
+                        "bottleneck": {"labels": ["scheduler-saturation"]},
+                    }
+                ]},
+            },
+            "baseline": {"summary": {"scenarios": [
+                {"context_length": 2048, "concurrency": 16, "p95_ttft_ms": 7200}
+            ]}},
+        },
+    }
+
+
+def test_inference_scheduler_saturation_uses_benchmark_evidence():
+    resp = stub_diagnose(_req(_inference_evidence()))
+    assert resp.category == "scheduler_saturation"
+    assert resp.severity == "warning"
+    assert "max_num_seqs=8" in resp.root_cause
+    assert any(item.source == "benchmark" for item in resp.evidence)
+    assert any("max_num_seqs=16" in action.action for action in resp.recommended_actions)
+
+
+def test_inference_success_gate_dominates_performance():
+    resp = stub_diagnose(_req(_inference_evidence(success_rate=0.9)))
+    assert resp.category == "request_failure"
+    assert resp.severity == "critical"
+    assert "90.0%" in resp.root_cause
+
+
+def test_inference_runtime_log_signatures_are_actionable_evidence():
+    evidence = _inference_evidence()
+    evidence["inference"]["runtime_logs"] = {"signatures": {
+        "marlin_fp8_fallback": 2,
+        "gpu_p2p_unavailable": 1,
+        "cuda_out_of_memory": 0,
+    }}
+
+    resp = stub_diagnose(_req(evidence))
+
+    log_details = [item.detail for item in resp.evidence if item.source == "logs"]
+    actions = [item.action for item in resp.recommended_actions]
+    assert "marlin_fp8_fallback x2" in log_details
+    assert "gpu_p2p_unavailable x1" in log_details
+    assert not any("cuda_out_of_memory" in detail for detail in log_details)
+    assert any("INT4/AWQ" in action for action in actions)
+    assert any("disable_custom_all_reduce=true" in action for action in actions)
+
+
+def _training_evidence(status="failed", logs="", output_artifact_uri=None):
+    return {
+        "scope": "training",
+        "training": {
+            "job": {
+                "id": "job-1",
+                "name": "qwen35-lora",
+                "status": status,
+                "base_model": "/model/Qwen3.5-4B",
+                "workers": 2,
+                "gpus_per_worker": 1,
+                "k8s_job_ref": "qwen35-lora",
+                "output_artifact_uri": output_artifact_uri,
+            },
+            "pytorch_job": {"phase": status.title(), "replica_statuses": {"Master": {"failed": 1}}},
+            "pod": {"pod": "qwen35-lora-master-0", "available": True, "logs": logs},
+        },
+    }
+
+
+def test_training_cuda_oom_diagnosis():
+    resp = stub_diagnose(_req(_training_evidence(logs="torch.cuda.OutOfMemoryError: CUDA out of memory")))
+    assert resp.category == "training_oom"
+    assert resp.severity == "critical"
+    assert any("gradient_accumulation_steps" in action.action for action in resp.recommended_actions)
+    assert any(item.source == "logs" for item in resp.evidence)
+
+
+def test_training_nccl_failure_diagnosis():
+    resp = stub_diagnose(_req(_training_evidence(logs="NCCL collective operation timeout")))
+    assert resp.category == "distributed_failure"
+    assert "NCCL" in resp.root_cause
+
+
+def test_training_running_is_informational():
+    resp = stub_diagnose(_req(_training_evidence(status="running")))
+    assert resp.category == "training_in_progress"
+    assert resp.severity == "info"
+
+
+def test_training_success_requires_artifact():
+    resp = stub_diagnose(_req(_training_evidence(status="succeeded")))
+    assert resp.category == "artifact_failure"
+    assert resp.severity == "warning"

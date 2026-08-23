@@ -26,6 +26,7 @@ import (
 	"github.com/heurry/cloudnative-infra-platform/server/internal/obs"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/serving"
 	"github.com/heurry/cloudnative-infra-platform/server/internal/store"
+	"github.com/heurry/cloudnative-infra-platform/server/internal/training"
 )
 
 func main() {
@@ -102,34 +103,56 @@ func main() {
 		PresignTTL: cfg.S3PresignTTL,
 	})
 
+	// 3.8) Phase F/F1：Kubeflow 训练客户端（PyTorchJob via dynamic client）。
+	// kubeconfig 加载失败时降级为 nil；CRD 未装时调用返回 error，均不阻塞启动。
+	trainingClient, trainingErr := training.NewClient(cfg.KubeconfigPath)
+	trainingErrStr := ""
+	if trainingErr != nil {
+		slog.Warn("training client unavailable (degraded)", "err", trainingErr)
+		trainingErrStr = trainingErr.Error()
+	} else {
+		slog.Info("training client ready")
+	}
+
 	// 4) HTTP。
 	st := store.New(pool)
 	apiSvc := &httpx.API{
-		Pool:           pool,
-		Agent:          agentcli.New(cfg.AgentBaseURL),
-		Metrics:        metrics.NewService(pool),
-		Store:          st,
-		AI:             aiclient.New(cfg.AIServiceBaseURL, cfg.AIRequestTimeout),
-		AIProxy:        aiProxy,
-		K8s:                k8sCollector,
-		K8sErr:             k8sErrStr,
-		AllowK8sWrites:     cfg.AllowK8sWrites,
-		K8sWriteNamespaces: cfg.K8sWriteNamespaces,
-		Serving:            servingScraper,
-		Cadvisor:       metrics.NewCadvisorCollector(cfg.CadvisorURL),
-		CORSOrigins:    cfg.CORSOrigins,
-		Cache:          cacheClient,
-		CacheTTL:       cfg.CacheTTL,
-		IdempotencyTTL: cfg.IdempotencyTTL,
-		RateLimitRPS:   cfg.RateLimitRPS,
-		RateLimitBurst: cfg.RateLimitBurst,
-		Blob:           blobStore,
-		StorageArchiveEnabled: cfg.StorageArchiveEnabled,
-		AuthEnabled:           cfg.AuthEnabled,
-		Auth:                  auth.NewIssuer(cfg.AuthJWTSecret, cfg.AuthTokenTTL),
-		Users:                 auth.ParseUsers(cfg.AuthUsers),
-		RoutingShadowEnabled:  cfg.RoutingShadowEnabled,
-		RAGRerankFeedback:     cfg.RAGRerankFeedback,
+		Pool:                   pool,
+		Agent:                  agentcli.New(cfg.AgentBaseURL),
+		Metrics:                metrics.NewService(pool),
+		Store:                  st,
+		AI:                     aiclient.New(cfg.AIServiceBaseURL, cfg.AIRequestTimeout),
+		AIProxy:                aiProxy,
+		K8s:                    k8sCollector,
+		K8sErr:                 k8sErrStr,
+		AllowK8sWrites:         cfg.AllowK8sWrites,
+		K8sWriteNamespaces:     cfg.K8sWriteNamespaces,
+		Training:               trainingClient,
+		TrainingErr:            trainingErrStr,
+		AllowTraining:          cfg.AllowTraining,
+		TrainingNamespaces:     cfg.TrainingNamespaces,
+		TrainingHostPath:       cfg.TrainingHostPath,
+		TrainingMountPath:      cfg.TrainingMountPath,
+		TrainingArtifactSecret: cfg.TrainingArtifactSecret,
+		TrainingOutputRoot:     cfg.TrainingOutputRoot,
+		Serving:                servingScraper,
+		Cadvisor:               metrics.NewCadvisorCollector(cfg.CadvisorURL),
+		CORSOrigins:            cfg.CORSOrigins,
+		Cache:                  cacheClient,
+		CacheTTL:               cfg.CacheTTL,
+		IdempotencyTTL:         cfg.IdempotencyTTL,
+		RateLimitRPS:           cfg.RateLimitRPS,
+		RateLimitBurst:         cfg.RateLimitBurst,
+		Blob:                   blobStore,
+		StorageArchiveEnabled:  cfg.StorageArchiveEnabled,
+		AuthEnabled:            cfg.AuthEnabled,
+		Auth:                   auth.NewIssuer(cfg.AuthJWTSecret, cfg.AuthTokenTTL),
+		Users:                  auth.ParseUsers(cfg.AuthUsers),
+		RoutingShadowEnabled:   cfg.RoutingShadowEnabled,
+		RAGRerankFeedback:      cfg.RAGRerankFeedback,
+		GitHubRepository:       cfg.GitHubRepository,
+		GitHubToken:            cfg.GitHubToken,
+		GitHubWorkflow:         cfg.GitHubWorkflow,
 	}
 	if cfg.AuthEnabled {
 		slog.Info("auth enabled (RBAC)", "users", len(apiSvc.Users))
