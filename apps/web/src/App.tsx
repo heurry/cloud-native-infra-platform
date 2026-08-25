@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { DeliveryContextBar } from "./components/layout/DeliveryContextBar";
@@ -32,6 +32,7 @@ export function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const auth = useAuth();
+  const mainRef = useRef<HTMLElement>(null);
 
   // URL 是导航的唯一真实来源；Page 仅作 UI 内部标识。
   const page = pageFromPath(location.pathname, new URLSearchParams(location.search).get("page"));
@@ -48,6 +49,11 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 每个工作台页面都应从顶部开始；同页查询参数变化则保留操作位置。
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [location.pathname]);
+
   function setPage(nextPage: Page) {
     const params = new URLSearchParams(location.search);
     params.delete("page");
@@ -58,7 +64,7 @@ export function App() {
     <div className="infra-platform-shell">
       <PlatformTopBar />
       <AppSidebar page={page} setPage={setPage} />
-      <main className="infra-main">
+      <main ref={mainRef} className="infra-main">
         <DeliveryContextBar />
         {renderPage(page, setPage)}
       </main>
