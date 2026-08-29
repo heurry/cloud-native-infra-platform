@@ -83,7 +83,13 @@ services:
       TRAINING_OUTPUT_ROOT: /opt/twinforge/artifacts/training
       # 新 AI 服务（结构化诊断 / chat:stream / embed）在同一 compose 网络内。
       AI_SERVICE_BASE_URL: http://python-ai-service:8200
-      # GitHub Actions 控制台集成；未配置 token 时 API 会明确返回 configured=false。
+      # CI 提供商：默认 GitLab。Project ID 可填数字或 group/project；Token 只从宿主环境注入。
+      CI_PROVIDER: ${CI_PROVIDER:-gitlab}
+      GITLAB_BASE_URL: ${GITLAB_BASE_URL:-https://gitlab.com}
+      GITLAB_PROJECT_ID: ${GITLAB_PROJECT_ID:-stu-group5083235/stu-project}
+      GITLAB_TOKEN: ${GITLAB_TOKEN:-}
+      GITLAB_REF: ${GITLAB_REF:-main}
+      # 兼容旧 GitHub Actions 接入；CI_PROVIDER=github_actions 时启用。
       GITHUB_REPOSITORY: ${GITHUB_REPOSITORY:-}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       GITHUB_WORKFLOW_FILE: ${GITHUB_WORKFLOW_FILE:-ci.yml}

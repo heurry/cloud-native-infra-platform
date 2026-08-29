@@ -68,6 +68,11 @@ type API struct {
 	TrainingMountPath      string
 	TrainingArtifactSecret string
 	TrainingOutputRoot     string
+	CIProvider             string
+	GitLabBaseURL          string
+	GitLabProjectID        string
+	GitLabToken            string
+	GitLabRef              string
 	GitHubRepository       string
 	GitHubToken            string
 	GitHubWorkflow         string

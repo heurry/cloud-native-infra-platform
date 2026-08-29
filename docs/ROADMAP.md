@@ -20,7 +20,7 @@
 | AI 运维分析 | ✅ 真实 + agentic（E1） | 单轮：`ai_handlers.go` Go 聚证据→LLM→落库+审计；agentic：`diagnose_agent.go` 多轮工具取证（`/ai/diagnose:agent`）+ 推理轨迹；`/ai/chat:stream` 流式 Copilot | LLM 不可达落 failed + 502；agent 无 GPU 走确定性 stub 脚本，降级诚实 |
 | 分层存储 | ✅ 有生命周期（C2 已实现） | Redis 热 + PG 关系 + MinIO 对象 + pgvector；`storage_archiver.go` 把过期 metrics/audit 归档 PG→MinIO（保留期读自配置中心），`/storage/tiers\|archives` | 真冷热迁移：PG 体积随归档下降、冷数据经清单可回溯；前端「存储分层」页 |
 | 元数据管理 | ✅ 独立注册中心（C1 已实现） | `models` 表版本化（version/parent_version血缘/lora/tags/artifact）；`/api/models/registry` CRUD + 产物→MinIO + 按 model_id 绑定 service_instances | 真 model registry：版本/血缘/产物/运行时绑定；前端「元数据管理」tab 接真数据 |
-| CI/CD 自动化 | ✅ 真实 rollout（A1 已实现） | 给出 image → `PatchDeploymentImage` + 轮询 `RolloutStatus`（`deploy_runner.go`），成败回写 + 失败自动回滚；未给 image 仍为记录态 | 真改 Deployment 镜像 + 跟踪滚动发布；受 `ALLOW_K8S_WRITES` + 命名空间守卫约束。仍无 build/test 阶段（CD 而非完整 CI） |
+| CI/CD 自动化 | ✅ GitLab CI + 真实 rollout | `.gitlab-ci.yml` 执行多语言构建、测试、sqlc/Helm 校验并推送组件镜像；发布中心查询/触发 GitLab Pipeline。给出 image 后执行 `PatchDeploymentImage` + 轮询 `RolloutStatus`，失败自动回滚 | CI 产出不可变 SHA 镜像，CD 负责本机/目标集群灰度和全量发布；写入仍受 `ALLOW_K8S_WRITES` + 命名空间守卫约束 |
 | 弹性扩缩容 | ✅ 可配置（A2 已实现） | 读：`/kubernetes/hpa` HPA spec/status；写：`ScaleDeployment` / `UpsertHPA` / `DeleteHPA`（`client.go`），路由见 `router.go` | 手动扩缩 + 配/删 HPA 真写；受 `ALLOW_K8S_WRITES` + 命名空间允许名单约束，serving 命名空间硬禁 |
 
 **已做未露（后端就绪、前端无消费）**：
@@ -29,7 +29,7 @@
 
 **跨切面（生产级，已落地）**：Redis 令牌桶限流 + 幂等键 + cache-aside、统一错误信封、审计日志、request-id、各依赖不可达透明降级、sqlc→store→dto 分层、D2 认证授权（HS256 JWT + viewer/operator/admin RBAC，默认关，审计绑真实身份）、D1 OTel trace + Prometheus /metrics。
 
-**总体判断**：「管理控制面 + 可观测 + AI 分析」三条线真实闭环；「自动化执行」线已从建模升级为**真执行**——A1 真改 Deployment 镜像 + 轮询滚动发布 + 失败自动回滚、A2 真 scale + 真配/删 HPA（均经 2026-06-08 真集群联调，见 `docs/e2e-evidence/`）；唯余「HPA 随真实负载自动伸缩」一项待 metrics-server（本次环境镜像源不可达）。CI/CD 仍是 CD（改镜像跟踪发布）而非含 build/test 的完整 CI。
+**总体判断**：「管理控制面 + 可观测 + AI 分析」三条线真实闭环；「自动化执行」线已从建模升级为**真执行**——GitLab CI 完成构建、测试和镜像产出，A1 真改 Deployment 镜像 + 轮询滚动发布 + 失败自动回滚，A2 真 scale + 真配/删 HPA（集群执行能力均经 2026-06-08 真集群联调，见 `docs/e2e-evidence/`）。唯余「HPA 随真实负载自动伸缩」一项待 metrics-server（本次环境镜像源不可达）。
 
 ---
 

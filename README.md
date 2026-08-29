@@ -4,7 +4,7 @@
 
 <h1 align="center">Cloud-Native Infrastructure Management Platform（TwinForge）</h1>
 
-[![CI](https://github.com/heurry/TwinForge/actions/workflows/ci.yml/badge.svg)](https://github.com/heurry/TwinForge/actions/workflows/ci.yml)
+[![pipeline status](https://gitlab.com/stu-group5083235/stu-project/badges/main/pipeline.svg)](https://gitlab.com/stu-group5083235/stu-project/-/pipelines)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 ![Go](https://img.shields.io/badge/Go-1.22-00ADD8?logo=go&logoColor=white)
 ![Node](https://img.shields.io/badge/Node-20-339933?logo=node.js&logoColor=white)
@@ -169,6 +169,23 @@ curl -s http://127.0.0.1:8010/v1/models
 > **为什么顺序不能反**：go-server 接入 `minikube` 外部网络以直达集群 API（`192.168.49.2:8443`）。若 minikube 未运行时先起应用层，Docker 会把 minikube 保留的 `192.168.49.2` 分给 go-server，之后 `minikube start` 报 `Address already in use`。两个脚本都内置预检，会**快速失败并给出修复指引**：
 > - `run_full_stack.sh`：minikube 容器存在但未运行时拒绝启动；无 GPU 仅跑应用层降级模式时用 `ALLOW_MINIKUBE_DOWN=1` 覆盖。
 > - `run_aibrix_4b_stack.sh`：`192.168.49.2` 被非 minikube 容器占用时拒绝启动，提示先 `docker compose -f deploy/compose/docker-compose.yml down`。
+
+### 4. 接入 GitLab CI/CD
+
+仓库根目录的 [`.gitlab-ci.yml`](.gitlab-ci.yml) 会在分支提交、合并请求和手动运行时执行 Go 控制面、Go Agent、React 前端、Python AI Service、sqlc 与 Helm 校验；默认分支和 tag 还会把四个组件镜像推送到 GitLab Container Registry。镜像地址格式为 `$CI_REGISTRY_IMAGE/<component>:<commit-sha>`，发布中心可使用该不可变 SHA 镜像执行灰度、全量发布和回滚。
+
+若要在平台的「发布中心 → CI / GitLab CI」中查看和触发流水线，先创建具有 `api` scope 的 GitLab Personal Access Token 或 Project Access Token，再从本地环境注入。不要把真实 token 写进 Compose 或提交到 Git：
+
+```bash
+cp deploy/compose/gitlab.env.example deploy/compose/gitlab.env
+# 仅在本机编辑 deploy/compose/gitlab.env，填入 GITLAB_TOKEN
+docker compose --env-file deploy/compose/gitlab.env \
+  -f deploy/compose/docker-compose.yml up -d --build
+```
+
+默认项目已设为 `stu-group5083235/stu-project`、分支为 `main`，也可以通过 `GITLAB_PROJECT_ID` 和 `GITLAB_REF` 覆盖。保留了旧 GitHub Actions 兼容入口；需要时设置 `CI_PROVIDER=github_actions` 和相应 `GITHUB_*` 变量。
+
+> GitLab SaaS Runner 无法直接访问本机 Minikube。流水线负责构建、测试和推送镜像；本机 Kubernetes 的灰度/全量 rollout 仍由发布中心执行，并受 `ALLOW_K8S_WRITES` 与命名空间白名单保护。
 
 ## 开发验证
 

@@ -61,6 +61,11 @@ type Config struct {
 	// E2：在线反馈回流。默认关时检索行为不变（仅采集反馈、回流评测数据集）；
 	// 开启后 chat 检索按反馈净分对候选做温和重排（命中过的好文档轻微上浮）。
 	RAGRerankFeedback bool
+	CIProvider        string // gitlab (default) | github_actions
+	GitLabBaseURL     string // https://gitlab.com or self-managed instance root
+	GitLabProjectID   string // numeric project id or URL-encoded path source (group/project)
+	GitLabToken       string // personal/project access token with api permission
+	GitLabRef         string // default branch used by console-triggered pipelines
 	GitHubRepository  string // owner/repo; empty disables console-triggered CI
 	GitHubToken       string // fine-grained token with Actions write permission
 	GitHubWorkflow    string // workflow file name or workflow id
@@ -110,6 +115,11 @@ func Load() Config {
 		AuthUsers:              env("AUTH_USERS", ""),
 		RoutingShadowEnabled:   envBool("ROUTING_SHADOW_ENABLED", false),
 		RAGRerankFeedback:      envBool("RAG_RERANK_FEEDBACK", false),
+		CIProvider:             env("CI_PROVIDER", "gitlab"),
+		GitLabBaseURL:          env("GITLAB_BASE_URL", "https://gitlab.com"),
+		GitLabProjectID:        env("GITLAB_PROJECT_ID", ""),
+		GitLabToken:            env("GITLAB_TOKEN", ""),
+		GitLabRef:              env("GITLAB_REF", "main"),
 		GitHubRepository:       env("GITHUB_REPOSITORY", ""),
 		GitHubToken:            env("GITHUB_TOKEN", ""),
 		GitHubWorkflow:         env("GITHUB_WORKFLOW_FILE", "ci.yml"),

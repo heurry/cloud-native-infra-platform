@@ -23,8 +23,8 @@ import type { Deployment, DeploymentMeta, PipelineConsoleRow } from "../types/op
 import type { KpiItem } from "../types/ui";
 
 const RUNNING = "running";
-type CIRun = { id: number; name: string; display_title: string; status: string; conclusion: string | null; html_url: string; head_branch: string; created_at: string };
-type CIRunsResponse = { configured: boolean; provider: string; repository?: string; workflow?: string; message?: string; runs: CIRun[] };
+type CIRun = { id: number; name: string; display_title: string; status: string; conclusion: string | null; html_url: string; head_branch: string; head_sha?: string; created_at: string };
+type CIRunsResponse = { configured: boolean; provider: string; repository?: string; workflow?: string; default_ref?: string; message?: string; runs: CIRun[] };
 
 export function PipelinesPage({ embedded = false }: { embedded?: boolean }) {
   const [creating, setCreating] = useState(false);
@@ -47,9 +47,9 @@ export function PipelinesPage({ embedded = false }: { embedded?: boolean }) {
     refetchInterval: 15000
   });
   const ciMutation = useMutation({
-    mutationFn: () => api("/api/ci/runs", { method: "POST", body: JSON.stringify({ ref: "main", operator: "frontend" }) }),
+    mutationFn: () => api("/api/ci/runs", { method: "POST", body: JSON.stringify({ ref: ciQuery.data?.default_ref || "main", operator: "frontend" }) }),
     onSuccess: () => {
-      toast.success("GitHub Actions CI 已触发");
+      toast.success(`${ciProviderLabel(ciQuery.data?.provider)} 流水线已触发`);
       setTimeout(() => ciQuery.refetch(), 2000);
     },
     onError: (e) => toast.error(`CI 触发失败：${describeError(e)}`)
@@ -189,17 +189,17 @@ export function PipelinesPage({ embedded = false }: { embedded?: boolean }) {
 
         <aside className="pipeline-side-stack">
           <section className="infra-panel">
-            <PanelHeader title="CI / GitHub Actions" action={ciQuery.data?.configured ? ciQuery.data.repository : "待配置"} />
+            <PanelHeader title={`CI / ${ciProviderLabel(ciQuery.data?.provider)}`} action={ciQuery.data?.repository || "待配置"} />
             {ciQuery.isLoading ? <Skeleton rows={3} /> : ciQuery.isError ? <ErrorState error={ciQuery.error} onRetry={ciQuery.refetch} /> : !ciQuery.data?.configured ? (
-              <EmptyState title="CI 连接未配置" description={ciQuery.data?.message || "配置 GitHub Actions 连接后可从控制台触发并查看构建、测试结果。"} />
+              <EmptyState title="CI 连接未配置" description={ciQuery.data?.message || "配置 GitLab CI 连接后可从控制台触发并查看构建、测试结果。"} />
             ) : <>
               <button className="infra-action-btn" disabled={ciMutation.isPending} onClick={() => ciMutation.mutate()} type="button">
-                <CheckCircle size={14} /> {ciMutation.isPending ? "触发中..." : "运行 main CI"}
+                <CheckCircle size={14} /> {ciMutation.isPending ? "触发中..." : `运行 ${ciQuery.data.default_ref || "main"} CI`}
               </button>
               <div className="pipeline-ci-list">
                 {ciQuery.data.runs.length ? ciQuery.data.runs.map((run) => <a href={run.html_url} key={run.id} rel="noreferrer" target="_blank">
                   <i className={cn(run.conclusion === "success" ? "success" : run.status === "in_progress" || run.status === "queued" ? "warning" : "danger")} />
-                  <span><strong>{run.display_title || run.name}</strong><small>{run.head_branch} · {relativeTime(run.created_at)}</small></span>
+                  <span><strong>{run.display_title || run.name}</strong><small>{run.head_branch}{run.head_sha ? ` · ${run.head_sha.slice(0, 8)}` : ""} · {relativeTime(run.created_at)}</small></span>
                   <StatusBadge status={run.conclusion || run.status} />
                 </a>) : <EmptyState title="暂无 CI 运行" />}
               </div>
@@ -230,6 +230,10 @@ export function PipelinesPage({ embedded = false }: { embedded?: boolean }) {
       {creating ? <TriggerDeployDrawer onClose={() => setCreating(false)} /> : null}
     </section>
   );
+}
+
+function ciProviderLabel(provider?: string) {
+  return provider === "github_actions" || provider === "github" ? "GitHub Actions" : "GitLab CI";
 }
 
 function PipelineTableRow({
