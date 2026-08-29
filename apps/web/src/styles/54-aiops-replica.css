@@ -72,6 +72,10 @@
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
   color: #0f172a;
 }
+.aiops-llm-status { align-items: center; background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; display: flex; font-size: 12px; gap: 8px; margin-bottom: 12px; padding: 9px 12px; }
+.aiops-llm-status.live { background: #ecfdf5; border-color: #a7f3d0; color: #047857; }
+.aiops-llm-status span { margin-left: auto; }
+.aiops-llm-status small { color: inherit; max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .aiops-process-ribbon {
   display: grid;

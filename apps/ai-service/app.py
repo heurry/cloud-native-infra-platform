@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import Dict, Iterator, List
 
+import requests
+
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 
@@ -39,6 +41,18 @@ setup_telemetry(app)
 
 @app.get("/internal/health")
 def health() -> Dict[str, object]:
+    upstream_ok = False
+    upstream_error = ""
+    if cfg.llm_base_url and cfg.stub_mode != "on":
+        try:
+            response = requests.get(cfg.llm_base_url.rstrip("/") + "/models", timeout=2)
+            response.raise_for_status()
+            models = [str(item.get("id")) for item in response.json().get("data", [])]
+            upstream_ok = cfg.llm_model in models
+            if not upstream_ok:
+                upstream_error = f"configured model {cfg.llm_model} not found"
+        except Exception as exc:  # noqa: BLE001 - health 必须返回可解释的降级状态
+            upstream_error = f"{type(exc).__name__}: {exc}"
     return {
         "service": "cloudnative-ai-service",
         "status": "ok",
@@ -46,6 +60,9 @@ def health() -> Dict[str, object]:
         "stub_mode": cfg.stub_mode,
         "llm_base_url": cfg.llm_base_url,
         "model": cfg.llm_model,
+        "llm_connected": upstream_ok,
+        "effective_mode": "live" if upstream_ok else "stub" if cfg.stub_mode != "off" else "unavailable",
+        "llm_error": upstream_error,
     }
 
 

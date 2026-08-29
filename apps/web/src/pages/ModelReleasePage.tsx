@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { parse, stringify } from "yaml";
@@ -56,9 +56,16 @@ type RuntimeForm = {
   schedulingPolicy: "fcfs" | "priority";
   prefixCaching: boolean;
   asyncScheduling: boolean;
-  gpuMemoryUtilization: 0.85 | 0.9 | 0.92;
-  maxModelLen: 3072 | 4096;
+  gpuMemoryUtilization: number;
+  maxModelLen: number;
   kvCacheDType: "auto" | "fp8";
+};
+
+type BenchmarkRun = {
+  run_id: string;
+  status: string;
+  endpoint_id?: string;
+  config?: { vllm?: Record<string, unknown> };
 };
 
 const DEFAULT_RUNTIME: RuntimeForm = {
@@ -86,6 +93,7 @@ export function ModelReleasePage({ initialTab = "model" }: { initialTab?: "model
   const [yamlDraft, setYamlDraft] = useState("");
   const [yamlError, setYamlError] = useState("");
   const [yamlDirty, setYamlDirty] = useState(false);
+  const hydratedRun = useRef("");
 
   const runtimeRequest = useMemo(() => runtimeRequestFromForm(runtimeForm), [runtimeForm]);
   const releaseQuery = useMemo(() => {
@@ -100,10 +108,17 @@ export function ModelReleasePage({ initialTab = "model" }: { initialTab?: "model
 
   const registry = useQuery({ queryKey: ["model-registry"], queryFn: listModelRegistry, refetchInterval: 10000 });
   const releases = useQuery({ queryKey: ["inference", "releases", releaseQuery], queryFn: () => api<ReleaseState>(`/api/inference/releases?${releaseQuery}`), refetchInterval: 5000 });
+  const benchmarkRun = useQuery({
+    queryKey: ["benchmark", "release", context.benchmarkRunId],
+    queryFn: () => api<BenchmarkRun>(`/api/benchmarks/${encodeURIComponent(context.benchmarkRunId!)}`),
+    enabled: Boolean(context.benchmarkRunId),
+  });
   const deployments = useQuery({ queryKey: ["deployments"], queryFn: () => api<{ deployments: Deployment[] }>("/api/deployments"), refetchInterval: 5000 });
   const instances = useQuery({ queryKey: ["service-instances"], queryFn: () => api<{ instances: ServiceInstance[] }>("/api/service-instances"), refetchInterval: 10000 });
 
   const releaseModelID = releases.data?.model_id || "qwen36-27b-fp8";
+  const benchmarkModelID = modelIDFromEndpoint(benchmarkRun.data?.endpoint_id);
+  const benchmarkModelMatches = !benchmarkModelID || benchmarkModelID === releaseModelID;
   const versions = useMemo(() => (registry.data?.versions ?? []).filter((item) => item.model_id === releaseModelID), [registry.data, releaseModelID]);
   useEffect(() => {
     if (context.modelVersionId && versions.some((item) => item.id === context.modelVersionId)) {
@@ -138,6 +153,25 @@ export function ModelReleasePage({ initialTab = "model" }: { initialTab?: "model
     setYamlError("");
     setYamlDirty(false);
   };
+
+  const applyBenchmarkConfig = () => {
+    const vllm = benchmarkRun.data?.config?.vllm;
+    if (!vllm) return;
+    setRuntimeForm((current) => runtimeFormFromBenchmark(vllm, current));
+    setApproved(false);
+    setYamlDraft("");
+    setYamlError("");
+    setYamlDirty(false);
+  };
+
+  useEffect(() => {
+    const runID = benchmarkRun.data?.run_id;
+    if (!runID || hydratedRun.current === runID || !benchmarkRun.data?.config?.vllm) return;
+    hydratedRun.current = runID;
+    applyBenchmarkConfig();
+  // 只在交付上下文切换到新的 Run 时自动回填；随后允许人工调整并触发“不匹配”门禁。
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [benchmarkRun.data?.run_id]);
 
   const applyYAML = () => {
     try {
@@ -197,7 +231,7 @@ export function ModelReleasePage({ initialTab = "model" }: { initialTab?: "model
     onError: (error) => toast.error("下线失败", { description: describeError(error) }),
   });
 
-  const evidenceMatches = !context.benchmarkRunId || candidate?.run_id === context.benchmarkRunId;
+  const evidenceMatches = !context.benchmarkRunId || (benchmarkModelMatches && candidate?.run_id === context.benchmarkRunId);
   const hardReady = Boolean(selected && selected.status !== "deprecated" && candidate?.gate_passed && evidenceMatches && approved && !yamlDirty && !yamlError && !release.isPending);
 
   return (
@@ -211,6 +245,12 @@ export function ModelReleasePage({ initialTab = "model" }: { initialTab?: "model
       <div className="release-center-tabs" role="tablist" aria-label="发布中心工作区">
         <button aria-selected={centerTab === "model"} className={centerTab === "model" ? "active" : ""} onClick={() => setCenterTab("model")} role="tab" type="button">模型服务发布</button>
         <button aria-selected={centerTab === "pipeline"} className={centerTab === "pipeline" ? "active" : ""} onClick={() => setCenterTab("pipeline")} role="tab" type="button">通用服务 CI/CD</button>
+      </div>
+
+      <div className="release-center-explainer">
+        {centerTab === "model"
+          ? "模型服务发布：选择已注册模型和 GPU 运行参数，必须绑定同参数压测证据，通过质量/SLO 门禁后启动 vLLM，并提供稳定的 OpenAI-Compatible API。"
+          : "通用服务 CI/CD：从 GitLab 源码触发构建、测试、镜像和 Kubernetes 部署，适用于控制面、网关及普通微服务；它不替代模型性能验收。"}
       </div>
 
       {centerTab === "pipeline" ? <PipelinesPage embedded /> : <>
@@ -295,7 +335,7 @@ export function ModelReleasePage({ initialTab = "model" }: { initialTab?: "model
                 <div><small>平均吞吐</small><strong>{candidate.average_output_tokens_per_second.toFixed(1)} tok/s</strong></div>
               </div> : null}
 
-              {!evidenceMatches ? <div className="release-context-warning"><AlertTriangle size={15} /><span>当前交付上下文指定 Run {context.benchmarkRunId?.slice(0, 12)}，但当前参数匹配的发布证据是 {candidate?.run_id?.slice(0, 12) || "无"}。请调整参数，或返回推理服务控制面重新验收。</span></div> : null}
+              {!benchmarkModelMatches ? <div className="release-context-warning"><AlertTriangle size={15} /><span>Run {context.benchmarkRunId?.slice(0, 12)} 验收的是 {benchmarkModelID}，当前发布通道是 {releaseModelID}；不同权重的证据不能混用。</span><button type="button" onClick={() => goTo("benchmarks", { deliveryKind: "inference", modelId: releaseModelID, benchmarkRunId: null })}>验收当前模型</button></div> : !evidenceMatches ? <div className="release-context-warning"><AlertTriangle size={15} /><span>Run {context.benchmarkRunId?.slice(0, 12)} 的验收参数与当前表单不一致，不能用另一组参数的证据发布。</span>{benchmarkRun.data?.config?.vllm ? <button type="button" onClick={applyBenchmarkConfig}>应用该 Run 参数</button> : <button type="button" onClick={() => goTo("benchmarks")}>重新验收</button>}</div> : null}
 
               <label>发布环境<select value={env} onChange={(event) => setEnv(event.target.value)}><option value="staging">staging</option><option value="prod">prod</option></select></label>
               <label className="release-approval"><input type="checkbox" checked={approved} onChange={(event) => setApproved(event.target.checked)} /><span>我已核对模型版本、压测 run、参数和 YAML，确认占用双卡启动生产服务</span></label>
@@ -323,6 +363,17 @@ export function ModelReleasePage({ initialTab = "model" }: { initialTab?: "model
             {runtimeActive && latest ? <div className="release-runtime-actions">
               <button type="button" disabled={stop.isPending} onClick={() => stop.mutate()}><Square size={13} />{stop.isPending ? "下线中..." : "下线服务"}</button>
             </div> : null}
+          </section>
+
+          <section className="infra-panel release-service-access">
+            <PanelHeader title="服务调用" action={runtimeStatus === "ready" ? "可调用" : "等待就绪"} />
+            <p>发布成功后通过 OpenAI-Compatible API 使用，不需要进入容器。</p>
+            <code>{releases.data?.runtime.endpoint || "http://127.0.0.1:8020/v1"}</code>
+            <div className="release-runtime-actions">
+              <button type="button" onClick={() => copyText(`${releases.data?.runtime.endpoint || "http://127.0.0.1:8020/v1"}/models`)}>复制 Models 地址</button>
+              <button type="button" onClick={() => copyText(modelCurl(releases.data?.runtime.endpoint, releases.data?.runtime.config?.model as string | undefined))}>复制 curl 示例</button>
+            </div>
+            <small>业务侧调用 `POST /v1/chat/completions`；需要 A/B、灰度或影子流量时，再绑定到“流量治理与路由”的稳定策略地址。</small>
           </section>
         </aside>
       </div>
@@ -375,6 +426,37 @@ function runtimeRequestFromForm(form: RuntimeForm): Record<string, unknown> {
     kv_cache_dtype: form.kvCacheDType,
     speculative_decoding: "none",
   };
+}
+
+function runtimeFormFromBenchmark(vllm: Record<string, unknown>, current: RuntimeForm): RuntimeForm {
+  const tp = Number(vllm.tensor_parallel_size ?? (current.parallelism === "tp2" ? 2 : 1));
+  const pp = Number(vllm.pipeline_parallel_size ?? (current.parallelism === "pp2" ? 2 : 1));
+  const scheduling = String(vllm.scheduling_policy ?? vllm.scheduler ?? current.schedulingPolicy);
+  const kv = String(vllm.kv_cache_dtype ?? current.kvCacheDType);
+  return {
+    parallelism: pp === 2 && tp !== 2 ? "pp2" : "tp2",
+    maxNumSeqs: Number(vllm.max_num_seqs ?? current.maxNumSeqs),
+    maxNumBatchedTokens: Number(vllm.max_num_batched_tokens ?? current.maxNumBatchedTokens),
+    schedulingPolicy: scheduling === "priority" ? "priority" : "fcfs",
+    prefixCaching: vllm.prefix_caching === true,
+    asyncScheduling: vllm.async_scheduling !== false,
+    gpuMemoryUtilization: Number(vllm.gpu_memory_utilization ?? current.gpuMemoryUtilization),
+    maxModelLen: Number(vllm.max_model_len ?? current.maxModelLen),
+    kvCacheDType: kv === "fp8" ? "fp8" : "auto",
+  };
+}
+
+function copyText(value: string) {
+  navigator.clipboard.writeText(value).then(() => toast.success("已复制调用信息")).catch(() => toast.error("复制失败"));
+}
+
+function modelCurl(endpoint?: string, model?: string): string {
+  const base = endpoint || "http://127.0.0.1:8020/v1";
+  return `curl -X POST ${base}/chat/completions -H 'Content-Type: application/json' -d '{"model":"${model || "qwen36-27b-fp8"}","messages":[{"role":"user","content":"你好"}]}'`;
+}
+
+function modelIDFromEndpoint(endpoint?: string): string {
+  return endpoint?.replace(/-vllm$/, "") || "";
 }
 
 function releaseSpec(modelVersionID: string, env: string, runtime: Record<string, unknown>): Record<string, unknown> {

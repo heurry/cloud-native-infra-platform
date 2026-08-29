@@ -83,6 +83,8 @@ export type ServiceInstance = {
 };
 
 export type Metrics = {
+	benchmark_run_id?: string;
+	source?: string;
   window?: string;
   window_seconds?: number;
   qps: number;

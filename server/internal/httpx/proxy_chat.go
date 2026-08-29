@@ -45,6 +45,7 @@ type instanceRow struct {
 
 // resolvedEndpoint 是选路后用于反代的目标。
 type resolvedEndpoint struct {
+	EndpointID      string
 	BaseURL         string
 	ModelID         string
 	TargetPod       string // x-target-pod
@@ -254,7 +255,7 @@ func (a *API) selectAuto(ctx context.Context, router *instanceRow) (*resolvedEnd
 
 // endpointFromRow 把一行转成反代目标；aibrix 网关附带 routing-strategy。
 func endpointFromRow(row *instanceRow) *resolvedEndpoint {
-	ep := &resolvedEndpoint{BaseURL: row.BaseURL, ModelID: row.ModelID, TargetPod: row.Name}
+	ep := &resolvedEndpoint{EndpointID: row.Name, BaseURL: row.BaseURL, ModelID: row.ModelID, TargetPod: row.Name}
 	if row.Kind == "aibrix" || row.RoutingRole == "gateway" {
 		ep.RoutingStrategy = routingStrategyFor(row.Metadata)
 	}

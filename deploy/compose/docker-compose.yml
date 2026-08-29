@@ -136,8 +136,10 @@ services:
     environment:
       # 默认 auto：试 live，失败回退 stub。无 GPU 环境可设 AI_STUB_MODE=on 强制确定性 stub。
       AI_STUB_MODE: ${AI_STUB_MODE:-auto}
-      AI_LLM_BASE_URL: http://host.docker.internal:8010/v1
-      AI_LLM_MODEL: qwen3-4b-customer
+      # AIOps 与模型发布共用当前受控 vLLM OpenAI-Compatible endpoint。
+      # 可通过 compose 环境覆盖；auto 模式不可达时会明确降级而非伪装成 LLM 结果。
+      AI_LLM_BASE_URL: ${AI_LLM_BASE_URL:-http://host.docker.internal:8020/v1}
+      AI_LLM_MODEL: ${AI_LLM_MODEL:-qwen36-27b-fp8}
       # D1：延续 Go 控制面的 traceparent 并向 vLLM 继续传播（默认空=关）。
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_SERVICE_NAME: ai-service

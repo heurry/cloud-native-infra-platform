@@ -39,6 +39,8 @@
 
 .release-context-warning { align-items: flex-start; background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; display: flex; font-size: 11px; gap: 7px; line-height: 1.5; padding: 8px 10px; }
 .release-context-warning svg { flex: 0 0 auto; margin-top: 1px; }
+.release-context-warning span { flex: 1; }
+.release-context-warning button { background: #fff; border: 1px solid #fdba74; color: #9a3412; cursor: pointer; flex: 0 0 auto; padding: 4px 8px; }
 .registry-row-selected { background: #eff6ff; box-shadow: inset 3px 0 0 #2563eb; }
 .training-detail-links { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
 
@@ -134,6 +136,9 @@
   box-shadow: 0 1px 3px rgb(15 23 42 / 12%);
   color: #1d4ed8;
 }
+.release-center-explainer { background: #f8fafc; border: 1px solid #dbe4ef; color: #475569; font-size: 12px; line-height: 1.6; margin: -8px 0 14px; padding: 9px 12px; }
+.release-service-access p, .release-service-access small { color: #64748b; font-size: 11px; line-height: 1.5; }
+.release-service-access code { background: #0f172a; color: #e2e8f0; display: block; font-size: 11px; margin: 8px 0; overflow-wrap: anywhere; padding: 8px; }
 
 .release-center-embedded {
   display: grid;

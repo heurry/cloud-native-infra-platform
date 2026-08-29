@@ -39,6 +39,7 @@ type DiagnosisResponse = {
   incident_id?: string | null;
   incident_created?: boolean;
 };
+type AIStatus = { status?: string; llm_connected?: boolean; effective_mode?: string; model?: string; llm_error?: string; error?: string };
 type Scenario = {
   context_length?: number;
   concurrency?: number;
@@ -104,6 +105,12 @@ export function AIOpsPage() {
     queryFn: () => api<InferenceEvidence>(`/api/ai/inference/evidence${context.benchmarkRunId ? `?run_id=${encodeURIComponent(context.benchmarkRunId)}` : ""}`),
     retry: false,
     refetchInterval: 15000,
+  });
+  const aiStatusQuery = useQuery({
+    queryKey: ["ai", "status"],
+    queryFn: () => api<AIStatus>("/api/ai/status"),
+    refetchInterval: 10_000,
+    retry: false,
   });
   const trainingQuery = useQuery({
     queryKey: ["ai", "training", "evidence", context.trainingJobId ?? "latest"],
@@ -208,6 +215,7 @@ export function AIOpsPage() {
   ];
 
   const refresh = () => {
+    aiStatusQuery.refetch();
     inferenceQuery.refetch();
     trainingQuery.refetch();
     incidentsQuery.refetch();
@@ -231,6 +239,13 @@ export function AIOpsPage() {
       <div className="aiops-scope-switch" role="tablist" aria-label="诊断范围">
         <button aria-selected={scope === "inference"} className={scope === "inference" ? "active" : ""} onClick={() => { setScope("inference"); update({ deliveryKind: "inference", trainingJobId: null }); }} role="tab" type="button"><Zap size={15} /> 推理服务诊断</button>
         <button aria-selected={scope === "training"} className={scope === "training" ? "active" : ""} onClick={() => { setScope("training"); update({ deliveryKind: "training", benchmarkRunId: null, deploymentId: null }); }} role="tab" type="button"><GraduationCap size={15} /> 训练任务诊断</button>
+      </div>
+
+      <div className={`aiops-llm-status ${aiStatusQuery.data?.llm_connected ? "live" : "degraded"}`}>
+        <Cpu size={15} />
+        <strong>{aiStatusQuery.data?.llm_connected ? "LLM 实时推理已连接" : "LLM 未连接，诊断将使用规则降级"}</strong>
+        <span>{aiStatusQuery.data?.model || "未配置模型"} · {aiStatusQuery.data?.effective_mode || "unknown"}</span>
+        {!aiStatusQuery.data?.llm_connected && (aiStatusQuery.data?.llm_error || aiStatusQuery.data?.error) ? <small>{aiStatusQuery.data.llm_error || aiStatusQuery.data.error}</small> : null}
       </div>
 
       <div className="aiops-question-bar">

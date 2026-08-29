@@ -237,6 +237,9 @@ requestLoop:
 				payload["error"] = res.err
 			}
 			a.appendBenchmarkEvent(ctx, runID, "request", payload)
+			// 压测请求同时进入统一请求追踪。此前只写 benchmark_samples，导致
+			// 可观测中心（request_traces/metrics_samples）在压测期间始终显示 0。
+			a.appendBenchmarkTrace(ctx, runID, ep, res)
 		}(i)
 	}
 	wg.Wait()
@@ -278,7 +281,41 @@ requestLoop:
 	summary["bottleneck"] = attributeBottleneck(summary)
 	summary["recommendations"] = recommendOptimizations(summary)
 	a.appendBenchmarkEvent(ctx, runID, "scenario_summary", map[string]any{"concurrency": concurrency, "context_length": scenarioContext, "context_mix": contextLengths, "summary": summary})
+	a.Metrics.PersistSample(ctx, "benchmark:"+runID, benchmarkMetricsSample(runID, ep, summary))
 	return summary
+}
+
+// appendBenchmarkTrace 把压测数据接入平台统一 trace 契约，供实时指标、请求追踪和 AIOps 共用。
+func (a *API) appendBenchmarkTrace(ctx context.Context, runID string, ep *resolvedEndpoint, res reqResult) {
+	status := "ok"
+	if res.err != "" {
+		status = "error"
+	}
+	generationMs := math.Max(0, res.totalMs-res.ttftMs)
+	metadata, _ := json.Marshal(map[string]any{"source": "benchmark", "benchmark_run_id": runID, "finish_reason": res.finishReason})
+	_, _ = a.Pool.Exec(ctx, `
+		INSERT INTO request_traces
+			(request_id, session_id, endpoint_id, target_pod, model_id, ttft_ms, generation_ms,
+			 total_ms, input_tokens, output_tokens, status, error, metadata)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)`,
+		res.requestID, "benchmark:"+runID, ep.EndpointID, ep.TargetPod, ep.ModelID,
+		nilIfZero(res.ttftMs), generationMs, res.totalMs, int(res.inputTokens), int(res.outputTokens),
+		status, nullableStr(res.err), string(metadata))
+}
+
+func benchmarkMetricsSample(runID string, ep *resolvedEndpoint, summary map[string]any) map[string]any {
+	requests := intFromAny(summary["requests"])
+	errors := intFromAny(summary["errors"])
+	return map[string]any{
+		"window": "benchmark_scenario", "benchmark_run_id": runID, "source": "benchmark",
+		"request_count": requests, "error_count": errors, "error_rate": summary["error_rate"],
+		"qps": summary["qps"], "mean_latency_ms": summary["mean_ms"],
+		"p50_latency_ms": summary["p50_ms"], "p95_latency_ms": summary["p95_ms"],
+		"p99_latency_ms": summary["p99_ms"], "mean_ttft_ms": summary["mean_ttft_ms"],
+		"p95_ttft_ms": summary["p95_ttft_ms"], "tokens_per_second": summary["output_tokens_per_second"],
+		"input_tokens": summary["input_tokens"], "output_tokens": summary["total_output_tokens"],
+		"endpoint_counts": map[string]int{ep.EndpointID: requests}, "target_pod_counts": map[string]int{ep.TargetPod: requests},
+	}
 }
 
 type benchmarkClassMetrics struct {

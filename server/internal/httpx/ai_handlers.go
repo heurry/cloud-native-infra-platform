@@ -31,6 +31,15 @@ type diagnoseReq struct {
 	Operator       string  `json:"operator"`
 }
 
+func (a *API) aiStatus(w http.ResponseWriter, r *http.Request) {
+	status, err := a.AI.Health(r.Context())
+	if err != nil {
+		WriteJSON(w, http.StatusOK, map[string]any{"status": "unavailable", "llm_connected": false, "effective_mode": "unavailable", "error": err.Error()})
+		return
+	}
+	WriteJSON(w, http.StatusOK, status)
+}
+
 func (a *API) diagnose(w http.ResponseWriter, r *http.Request) {
 	var req diagnoseReq
 	if err := decodeBody(r, &req); err != nil {
