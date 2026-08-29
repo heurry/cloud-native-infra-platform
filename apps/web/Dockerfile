@@ -2,7 +2,21 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+# npm 10 may rarely emit "Exit handler never called" yet return success before
+# installing binaries on ephemeral CI runners. Verify tsc exists and retry from
+# a clean node_modules directory so an incomplete install cannot pass this layer.
+RUN set -eu; \
+    attempt=1; \
+    while [ "$attempt" -le 3 ]; do \
+      rm -rf node_modules; \
+      if npm ci --no-audit --no-fund && test -x node_modules/.bin/tsc; then \
+        exit 0; \
+      fi; \
+      echo "npm ci attempt ${attempt} failed or incomplete; retrying"; \
+      attempt=$((attempt + 1)); \
+      sleep 5; \
+    done; \
+    exit 1
 COPY . .
 RUN npm run build
 
