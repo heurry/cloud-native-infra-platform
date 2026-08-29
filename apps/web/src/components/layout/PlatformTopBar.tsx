@@ -7,7 +7,7 @@ import { relativeTime } from "../../lib/format";
 import { cn } from "../../lib/utils";
 import { useAuth } from "../../lib/useAuth";
 import { useGoToPage } from "../../lib/useGoToPage";
-import { pageLabels, type Page } from "../../types/navigation";
+import { navigationPages, pageLabels, type Page } from "../../types/navigation";
 import type { Incident } from "../../types/ops";
 
 type AlertItem = {
@@ -72,11 +72,11 @@ export function PlatformTopBar() {
     event.preventDefault();
     const q = searchText.trim().toLowerCase();
     if (!q) return;
-    const hit = (Object.entries(pageLabels) as Array<[Page, string]>).find(
-      ([page, label]) => label.toLowerCase().includes(q) || page.toLowerCase().includes(q)
+    const hit = navigationPages.find(
+      (page) => pageLabels[page].toLowerCase().includes(q) || page.toLowerCase().includes(q)
     );
     if (hit) {
-      goTo(hit[0]);
+      goTo(hit);
       setSearchText("");
     }
   }
@@ -149,7 +149,7 @@ export function PlatformTopBar() {
       </div>
       <form className="infra-global-search" onSubmit={onSearch}>
         <Search size={15} />
-        <input ref={searchRef} onChange={(event) => setSearchText(event.target.value)} placeholder="搜索：训练 / 推理优化 / AIOps / 模型…" value={searchText} />
+        <input ref={searchRef} onChange={(event) => setSearchText(event.target.value)} placeholder="搜索：训练 / 推理服务 / AIOps / 配置中心…" value={searchText} />
         <kbd>⌘ K</kbd>
       </form>
       <div className="infra-topbar-actions" ref={actionsRef}>

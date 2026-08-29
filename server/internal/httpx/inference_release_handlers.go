@@ -31,6 +31,7 @@ type inferenceReleaseProfile struct {
 	Description      string
 	MaxNumSeqs       int
 	MaxBatchedTokens int
+	PrefixCaching    bool
 	RuntimeRequest   map[string]any
 }
 
@@ -38,12 +39,12 @@ func inferenceReleaseProfiles() []inferenceReleaseProfile {
 	return []inferenceReleaseProfile{
 		{
 			Key: "balanced", Label: "均衡档", Description: "优先控制 TPOT，适合默认客服流量。",
-			MaxNumSeqs: 8, MaxBatchedTokens: 4096,
+			MaxNumSeqs: 8, MaxBatchedTokens: 4096, PrefixCaching: true,
 			RuntimeRequest: map[string]any{"profile": "prefix_cache"},
 		},
 		{
 			Key: "high_throughput", Label: "高并发档", Description: "降低 C16 TTFT 并提高吞吐，TPOT 会有所增加。",
-			MaxNumSeqs: 16, MaxBatchedTokens: 8192,
+			MaxNumSeqs: 16, MaxBatchedTokens: 8192, PrefixCaching: true,
 			RuntimeRequest: map[string]any{
 				"profile": "scheduler", "max_num_seqs": 16, "max_num_batched_tokens": 8192,
 				"prefix_caching": true, "scheduling_policy": "fcfs", "max_num_partial_prefills": 1,
@@ -63,6 +64,66 @@ func inferenceReleaseProfileByKey(key string) (inferenceReleaseProfile, bool) {
 		}
 	}
 	return inferenceReleaseProfile{}, false
+}
+
+func customInferenceReleaseProfile(request map[string]any) (inferenceReleaseProfile, error) {
+	if len(request) == 0 {
+		return inferenceReleaseProfile{}, errors.New("runtime_request required")
+	}
+	runtimeRequest := make(map[string]any, len(request)+1)
+	for key, value := range request {
+		runtimeRequest[key] = value
+	}
+	profile := strings.TrimSpace(stringValue(runtimeRequest["profile"]))
+	if profile == "" {
+		profile = "scheduler"
+		runtimeRequest["profile"] = profile
+	}
+	if profile != "scheduler" {
+		return inferenceReleaseProfile{}, errors.New("custom release requires profile=scheduler")
+	}
+	maxNumSeqs := intFromAny(runtimeRequest["max_num_seqs"])
+	maxBatchedTokens := intFromAny(runtimeRequest["max_num_batched_tokens"])
+	if !allowedReleaseInt(maxNumSeqs, 8, 12, 16, 24, 32) {
+		return inferenceReleaseProfile{}, errors.New("max_num_seqs must be one of 8, 12, 16, 24 or 32")
+	}
+	if !allowedReleaseInt(maxBatchedTokens, 2048, 4096, 8192) {
+		return inferenceReleaseProfile{}, errors.New("max_num_batched_tokens must be one of 2048, 4096 or 8192")
+	}
+	tp := intFromAny(runtimeRequest["tensor_parallel_size"])
+	pp := intFromAny(runtimeRequest["pipeline_parallel_size"])
+	if tp == 0 {
+		tp = 2
+		runtimeRequest["tensor_parallel_size"] = tp
+	}
+	if pp == 0 {
+		pp = 1
+		runtimeRequest["pipeline_parallel_size"] = pp
+	}
+	if tp*pp != 2 {
+		return inferenceReleaseProfile{}, errors.New("tensor_parallel_size * pipeline_parallel_size must equal the available 2 GPUs")
+	}
+	prefixCaching := true
+	if value, ok := runtimeRequest["prefix_caching"].(bool); ok {
+		prefixCaching = value
+	} else {
+		runtimeRequest["prefix_caching"] = true
+	}
+	return inferenceReleaseProfile{
+		Key:   fmt.Sprintf("custom-%d-%d", maxNumSeqs, maxBatchedTokens),
+		Label: "自定义配置", Description: "由发布参数或 YAML 生成的受控运行时配置。",
+		MaxNumSeqs: maxNumSeqs, MaxBatchedTokens: maxBatchedTokens, PrefixCaching: prefixCaching,
+		RuntimeRequest: runtimeRequest,
+	}, nil
+}
+
+func allowedReleaseInt(value int, allowed ...int) bool {
+	for _, candidate := range allowed {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 type inferenceReleaseCandidate struct {
@@ -217,17 +278,18 @@ func summarizeReleaseCandidate(profile inferenceReleaseProfile, evidence inferen
 	return result
 }
 
-func (a *API) loadInferenceReleaseCandidate(ctx context.Context, profile inferenceReleaseProfile) (inferenceReleaseCandidate, error) {
+func (a *API) loadInferenceReleaseCandidate(ctx context.Context, profile inferenceReleaseProfile, runID string) (inferenceReleaseCandidate, error) {
 	row := a.Pool.QueryRow(ctx, `
 		SELECT run_id, COALESCE(endpoint_id,''), COALESCE(workload,''), config, summary,
 		       COALESCE(report_path,''), created_at, updated_at
 		FROM benchmark_runs
 		WHERE status='completed' AND endpoint_id=$1
-		  AND COALESCE((config->'vllm'->>'prefix_caching')::boolean, false)=true
-		  AND COALESCE((config->'vllm'->>'max_num_seqs')::int, 0)=$2
-		  AND COALESCE((config->'vllm'->>'max_num_batched_tokens')::int, 0)=$3
+		  AND COALESCE((config->'vllm'->>'prefix_caching')::boolean, false)=$2
+		  AND COALESCE((config->'vllm'->>'max_num_seqs')::int, 0)=$3
+		  AND COALESCE((config->'vllm'->>'max_num_batched_tokens')::int, 0)=$4
+		  AND ($5='' OR run_id::text=$5)
 		ORDER BY jsonb_array_length(COALESCE(summary->'scenarios','[]'::jsonb)) DESC, updated_at DESC
-		LIMIT 1`, inferenceReleaseEndpoint, profile.MaxNumSeqs, profile.MaxBatchedTokens)
+		LIMIT 1`, inferenceReleaseEndpoint, profile.PrefixCaching, profile.MaxNumSeqs, profile.MaxBatchedTokens, runID)
 	evidence, err := scanBenchmarkEvidence(row)
 	if err != nil {
 		return inferenceReleaseCandidate{}, err
@@ -239,7 +301,7 @@ func (a *API) loadInferenceReleaseCandidate(ctx context.Context, profile inferen
 func (a *API) inferenceReleaseCandidates(w http.ResponseWriter, r *http.Request) {
 	candidates := make([]inferenceReleaseCandidate, 0, len(inferenceReleaseProfiles()))
 	for _, profile := range inferenceReleaseProfiles() {
-		candidate, err := a.loadInferenceReleaseCandidate(r.Context(), profile)
+		candidate, err := a.loadInferenceReleaseCandidate(r.Context(), profile, "")
 		if err != nil {
 			candidate = inferenceReleaseCandidate{
 				Profile: profile.Key, Label: profile.Label, Description: profile.Description,
@@ -261,18 +323,41 @@ func (a *API) inferenceReleaseCandidates(w http.ResponseWriter, r *http.Request)
 	if runtime["status"] == "starting" {
 		logs = a.Agent.FetchObject(r.Context(), "/api/inference/runtime/logs")
 	}
-	WriteJSON(w, http.StatusOK, map[string]any{
+	payload := map[string]any{
 		"model_id": inferenceReleaseModelID, "endpoint_id": inferenceReleaseEndpoint,
 		"candidates": candidates, "runtime": runtime,
 		"progress": deriveInferenceReleaseProgress(runtime, logs, releaseActive),
-	})
+	}
+	if maxNumSeqs, seqErr := strconv.Atoi(r.URL.Query().Get("max_num_seqs")); seqErr == nil {
+		if maxBatchedTokens, tokenErr := strconv.Atoi(r.URL.Query().Get("max_num_batched_tokens")); tokenErr == nil {
+			prefixCaching := r.URL.Query().Get("prefix_caching") != "false"
+			requested, profileErr := customInferenceReleaseProfile(map[string]any{
+				"profile": "scheduler", "max_num_seqs": maxNumSeqs,
+				"max_num_batched_tokens": maxBatchedTokens, "prefix_caching": prefixCaching,
+			})
+			if profileErr == nil {
+				candidate, candidateErr := a.loadInferenceReleaseCandidate(r.Context(), requested, r.URL.Query().Get("benchmark_run_id"))
+				if candidateErr != nil {
+					candidate = inferenceReleaseCandidate{Profile: requested.Key, Label: requested.Label, Description: requested.Description,
+						MaxNumSeqs: requested.MaxNumSeqs, MaxNumBatchedTokens: requested.MaxBatchedTokens,
+						RuntimeRequest: requested.RuntimeRequest, Error: candidateErr.Error(),
+						SLOTTFTLimitMs: inferenceReleaseMaxP95TTFTMs, SLOTPOTLimitMs: inferenceReleaseMaxP95TPOTMs}
+				}
+				payload["requested_candidate"] = candidate
+			}
+		}
+	}
+	WriteJSON(w, http.StatusOK, payload)
 }
 
 type submitInferenceReleaseRequest struct {
-	ModelVersionID string `json:"model_version_id"`
-	Profile        string `json:"profile"`
-	Env            string `json:"env"`
-	Operator       string `json:"operator"`
+	ModelVersionID string         `json:"model_version_id"`
+	Profile        string         `json:"profile"`
+	RuntimeRequest map[string]any `json:"runtime_request"`
+	ReleaseSpec    string         `json:"release_spec"`
+	BenchmarkRunID string         `json:"benchmark_run_id"`
+	Env            string         `json:"env"`
+	Operator       string         `json:"operator"`
 }
 
 func (a *API) submitInferenceRelease(w http.ResponseWriter, r *http.Request) {
@@ -285,9 +370,19 @@ func (a *API) submitInferenceRelease(w http.ResponseWriter, r *http.Request) {
 		a.badRequest(w, r, "model_version_id required")
 		return
 	}
-	profile, ok := inferenceReleaseProfileByKey(req.Profile)
-	if !ok {
-		a.badRequest(w, r, "profile must be balanced or high_throughput")
+	var profile inferenceReleaseProfile
+	var ok bool
+	var profileErr error
+	if len(req.RuntimeRequest) > 0 {
+		profile, profileErr = customInferenceReleaseProfile(req.RuntimeRequest)
+	} else {
+		profile, ok = inferenceReleaseProfileByKey(req.Profile)
+		if !ok {
+			profileErr = errors.New("profile must be a known template or runtime_request must be provided")
+		}
+	}
+	if profileErr != nil {
+		a.badRequest(w, r, profileErr.Error())
 		return
 	}
 	model, err := a.Store.GetModelVersion(r.Context(), req.ModelVersionID)
@@ -307,9 +402,9 @@ func (a *API) submitInferenceRelease(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, http.StatusConflict, "release_model_deprecated", "deprecated model version cannot be released")
 		return
 	}
-	candidate, err := a.loadInferenceReleaseCandidate(r.Context(), profile)
+	candidate, err := a.loadInferenceReleaseCandidate(r.Context(), profile, req.BenchmarkRunID)
 	if err != nil {
-		WriteError(w, r, http.StatusConflict, "release_evidence_missing", "没有与所选档位完全匹配的已完成压测")
+		WriteError(w, r, http.StatusConflict, "release_evidence_missing", "没有与当前核心运行参数完全匹配的已完成压测")
 		return
 	}
 	if !candidate.GatePassed {
@@ -358,6 +453,7 @@ func (a *API) submitInferenceRelease(w http.ResponseWriter, r *http.Request) {
 		"owner": operator, "mode": "inference_runtime", "phase": "queued",
 		"model_id": model.ModelID, "model_version_id": model.ID, "endpoint_id": inferenceReleaseEndpoint,
 		"release_profile": profile.Key, "runtime_request": profile.RuntimeRequest,
+		"release_spec":     req.ReleaseSpec,
 		"benchmark_run_id": candidate.RunID, "benchmark_report": candidate.ReportPath,
 		"gate": map[string]any{"passed": true, "scenarios": candidate.Scenarios, "min_success_rate": candidate.MinSuccessRate, "min_quality_rate": candidate.MinQualityRate,
 			"max_p95_ttft_ms": candidate.MaxP95TTFTMs, "max_p95_tpot_ms": candidate.MaxP95TPOTMs,
@@ -373,7 +469,7 @@ func (a *API) submitInferenceRelease(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.Store.Audit(r.Context(), operator, "operator", "inference.release.trigger", "model", model.ModelID+":"+model.Version,
-		map[string]any{"deployment_id": id, "profile": profile.Key, "benchmark_run_id": candidate.RunID})
+		map[string]any{"deployment_id": id, "profile": profile.Key, "benchmark_run_id": candidate.RunID, "runtime_request": profile.RuntimeRequest})
 	go a.runInferenceRelease(id, model.ID, model.ModelID, model.Version, operator, profile, meta)
 	WriteJSON(w, http.StatusAccepted, map[string]any{"id": id, "status": "running", "profile": profile.Key, "benchmark_run_id": candidate.RunID})
 }
@@ -459,6 +555,7 @@ func runtimeRequestForRestore(status map[string]any) (map[string]any, bool) {
 	config, _ := status["config"].(map[string]any)
 	request := map[string]any{"profile": "scheduler"}
 	for _, key := range []string{
+		"tensor_parallel_size", "pipeline_parallel_size", "pipeline_layer_partition",
 		"max_num_seqs", "max_num_batched_tokens", "scheduling_policy", "max_num_partial_prefills",
 		"max_long_partial_prefills", "long_prefill_token_threshold", "stream_interval", "prefix_caching",
 		"async_scheduling", "scheduler_reserve_full_isl", "disable_custom_all_reduce", "profiling",

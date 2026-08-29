@@ -42,7 +42,7 @@ type Evidence = {
 
 const trainingLifecycle: Array<{ label: string; page: Page; icon: typeof Database }> = [
   { label: "模型与数据", page: "datasets", icon: Database },
-  { label: "训练微调", page: "training", icon: GraduationCap },
+  { label: "训练任务", page: "training", icon: GraduationCap },
   { label: "版本归档", page: "models", icon: Boxes },
   { label: "训练诊断", page: "aiOps", icon: Bot },
 ];
@@ -134,7 +134,7 @@ export function PlatformOverviewPage({ setPage }: { setPage: (page: Page) => voi
       <div className="overview-workbench-grid">
         <Workflow
           icon={GraduationCap}
-          title="训练微调控制面"
+          title="训练任务控制面"
           model="Qwen3.5-4B"
           state={activeTraining ? `执行中 · ${activeTraining.name}` : latestTraining ? `最近 ${latestTraining.status}` : "待启动"}
           detail="DianJin-CSC 客服数据 · LoRA / PEFT · Kubeflow PyTorchJob"
@@ -143,7 +143,7 @@ export function PlatformOverviewPage({ setPage }: { setPage: (page: Page) => voi
         />
         <Workflow
           icon={Gauge}
-          title="推理优化工作台"
+          title="推理服务控制面"
           model={runtime.data?.model || evidenceModelID || "Qwen3.6-27B"}
           state={runtime.data?.status || "未启动"}
           detail={`${runtime.data?.profile || "baseline"} · Prefix Cache ${runtime.data?.prefix_caching ? "ON" : "OFF"} · 1K/2K × C1-C16`}
@@ -161,7 +161,7 @@ export function PlatformOverviewPage({ setPage }: { setPage: (page: Page) => voi
         />
         <Workflow
           icon={Bot}
-          title="AIOps 诊断"
+          title="智能诊断"
           model={openIncidents.length ? `${openIncidents.length} 个待处理事件` : "当前无未解决事件"}
           state={openIncidents[0]?.severity || "healthy"}
           detail={openIncidents[0]?.summary || "训练证据、推理压测、运行日志、K8s 与 GPU 指标统一诊断"}
@@ -173,7 +173,7 @@ export function PlatformOverviewPage({ setPage }: { setPage: (page: Page) => voi
       <div className="overview-bottom-grid">
         <section className="infra-panel overview-scenario-panel">
           <PanelHeader title="最近推理验收矩阵" action={evidence.data?.inference?.benchmark?.run_id ? `run ${evidence.data.inference.benchmark.run_id.slice(0, 8)}` : "暂无正式结果"} />
-          {evidence.isLoading ? <Skeleton rows={3} /> : evidence.isError || !scenarios.length ? <EmptyState title="暂无已完成压测" description="启动 vLLM 后在推理优化工作台运行 1K/2K × 1-16 并发矩阵" /> : (
+          {evidence.isLoading ? <Skeleton rows={3} /> : evidence.isError || !scenarios.length ? <EmptyState title="暂无已完成压测" description="启动 vLLM 后在推理服务控制面运行 1K/2K × 1-16 并发矩阵" /> : (
             <div className="overview-scenario-table">
               <div className="overview-scenario-row header"><span>上下文</span><span>并发</span><span>TTFT P95</span><span>TPOT P95</span><span>端到端 P95</span><span>吞吐</span><span>成功 / 正确</span></div>
               {scenarios.slice(0, 10).map((row, index) => <div className="overview-scenario-row" key={`${row.context_length}-${row.concurrency}-${index}`}><strong>{row.context_length ?? "-"}</strong><span>{row.concurrency ?? "-"}</span><span>{ms(row.p95_ttft_ms)}</span><span>{ms(row.p95_tpot_ms, 1)}</span><span>{ms(row.p95_ms)}</span><span>{throughput(row)} tok/s</span><span><StatusBadge status={Number(row.success_rate ?? 0) >= 0.99 && Number(row.quality_gate_pass_rate ?? 0) >= 0.99 ? "通过" : "未通过"} /></span></div>)}
@@ -182,9 +182,9 @@ export function PlatformOverviewPage({ setPage }: { setPage: (page: Page) => voi
         </section>
         <section className="infra-panel overview-infra-panel">
           <PanelHeader title="平台底座" action="次级能力" />
-          <InfraLink icon={Server} title="服务与 Workload" detail={`${metrics.data?.service_instances?.length ?? 0} 个运行实例`} onClick={() => setPage("services")} />
-          <InfraLink icon={Activity} title="可观测性" detail={metrics.data ? `QPS ${fmt(metrics.data.qps ?? 0, 1)} · P95 ${metrics.data.p95_latency_ms == null ? "—" : `${fmt(metrics.data.p95_latency_ms, 0)} ms`}` : "等待指标"} onClick={() => setPage("observability")} />
-          <InfraLink icon={Boxes} title="Kubernetes" detail={metrics.data?.kubernetes?.available ? `${metrics.data.kubernetes.pods.length} Pods` : "集群状态不可用"} onClick={() => setPage("kubernetes")} />
+          <InfraLink icon={Server} title="服务目录" detail={`${metrics.data?.service_instances?.length ?? 0} 个运行实例`} onClick={() => setPage("services")} />
+          <InfraLink icon={Activity} title="可观测中心" detail={metrics.data ? `QPS ${fmt(metrics.data.qps ?? 0, 1)} · P95 ${metrics.data.p95_latency_ms == null ? "—" : `${fmt(metrics.data.p95_latency_ms, 0)} ms`}` : "等待指标"} onClick={() => setPage("observability")} />
+          <InfraLink icon={Boxes} title="集群与资源" detail={metrics.data?.kubernetes?.available ? `${metrics.data.kubernetes.pods.length} Pods` : "集群状态不可用"} onClick={() => setPage("kubernetes")} />
         </section>
       </div>
     </section>

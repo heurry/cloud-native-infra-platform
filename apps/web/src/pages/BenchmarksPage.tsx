@@ -299,7 +299,7 @@ export function BenchmarksPage() {
   return (
     <section className="infra-page benchmarks-page benchmark-replica">
       <PageHeader
-        title="推理优化工作台"
+        title="推理服务控制面"
         subtitle={`Qwen3.6-27B 推理系列（当前运行时 ${runtime?.model || context.modelId || "FP8"}）：服务启停、压测、Profiling、瓶颈归因与控制变量优化`}
         actions={
           <>

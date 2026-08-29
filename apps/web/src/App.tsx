@@ -16,7 +16,6 @@ import { CustomerSupportPage } from "./pages/CustomerSupportPage";
 import { RetrievalEvalPage } from "./pages/RetrievalEvalPage";
 import { FeedbackReflowPage } from "./pages/FeedbackReflowPage";
 import { ObservabilityPage } from "./pages/ObservabilityPage";
-import { PipelinesPage } from "./pages/PipelinesPage";
 import { ModelsPage } from "./pages/ModelsPage";
 import { RoutingPage } from "./pages/RoutingPage";
 import { StoragePage } from "./pages/StoragePage";
@@ -80,7 +79,7 @@ function renderPage(page: Page, setPage: (page: Page) => void) {
     case "services": return <ServicesPage />;
     case "kubernetes": return <KubernetesPage />;
     case "config": return <ConfigCenterPage />;
-    case "pipelines": return <PipelinesPage />;
+    case "pipelines": return <ModelReleasePage initialTab="pipeline" />;
     case "observability": return <ObservabilityPage />;
     case "aiOps": return <AIOpsPage />;
     case "knowledge": return <KnowledgePage />;

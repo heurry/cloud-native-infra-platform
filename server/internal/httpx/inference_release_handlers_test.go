@@ -22,6 +22,33 @@ func TestInferenceReleaseProfilesUseValidatedParameters(t *testing.T) {
 	}
 }
 
+func TestCustomInferenceReleaseProfileUsesSubmittedParameters(t *testing.T) {
+	profile, err := customInferenceReleaseProfile(map[string]any{
+		"profile": "scheduler", "max_num_seqs": 24, "max_num_batched_tokens": 4096,
+		"tensor_parallel_size": 1, "pipeline_parallel_size": 2, "prefix_caching": false,
+	})
+	if err != nil {
+		t.Fatalf("custom profile should be accepted: %v", err)
+	}
+	if profile.Key != "custom-24-4096" || profile.MaxNumSeqs != 24 || profile.MaxBatchedTokens != 4096 || profile.PrefixCaching {
+		t.Fatalf("unexpected custom profile: %+v", profile)
+	}
+	if profile.RuntimeRequest["tensor_parallel_size"] != 1 || profile.RuntimeRequest["pipeline_parallel_size"] != 2 {
+		t.Fatalf("custom parallel parameters were lost: %+v", profile.RuntimeRequest)
+	}
+	if _, err := customInferenceReleaseProfile(map[string]any{
+		"profile": "scheduler", "max_num_seqs": 7, "max_num_batched_tokens": 4096,
+	}); err == nil {
+		t.Fatal("unsupported max_num_seqs must be rejected")
+	}
+	if _, err := customInferenceReleaseProfile(map[string]any{
+		"profile": "scheduler", "max_num_seqs": 8, "max_num_batched_tokens": 4096,
+		"tensor_parallel_size": 2, "pipeline_parallel_size": 2,
+	}); err == nil {
+		t.Fatal("parallel configuration exceeding two GPUs must be rejected")
+	}
+}
+
 func TestSummarizeReleaseCandidateRequiresEveryScenarioToPass(t *testing.T) {
 	profile, _ := inferenceReleaseProfileByKey("balanced")
 	evidence := inferenceBenchmarkEvidence{RunID: "run-1", Summary: map[string]any{"scenarios": []any{
@@ -52,9 +79,12 @@ func TestRuntimeRequestForRestore(t *testing.T) {
 	}
 	request, ok = runtimeRequestForRestore(map[string]any{
 		"status": "ready", "profile": "scheduler",
-		"config": map[string]any{"max_num_seqs": 16.0, "max_num_batched_tokens": 8192.0, "prefix_caching": true},
+		"config": map[string]any{
+			"tensor_parallel_size": 1.0, "pipeline_parallel_size": 2.0,
+			"max_num_seqs": 16.0, "max_num_batched_tokens": 8192.0, "prefix_caching": true,
+		},
 	})
-	if !ok || request["profile"] != "scheduler" || request["max_num_seqs"] != 16.0 || request["prefix_caching"] != true {
+	if !ok || request["profile"] != "scheduler" || request["tensor_parallel_size"] != 1.0 || request["pipeline_parallel_size"] != 2.0 || request["max_num_seqs"] != 16.0 || request["prefix_caching"] != true {
 		t.Fatalf("unexpected scheduler restore request: %+v", request)
 	}
 }

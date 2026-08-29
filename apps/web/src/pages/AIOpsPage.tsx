@@ -219,7 +219,7 @@ export function AIOpsPage() {
     <section className="infra-page aiops-page aiops-replica">
       <PageHeader
         title="AIOps / 智能诊断"
-        subtitle="训练微调与推理优化的多源取证、瓶颈归因和 Incident 闭环"
+        subtitle="训练任务与推理服务的多源取证、瓶颈归因和 Incident 闭环"
         actions={<>
           <button className="console-refresh primary" disabled={busy || !evidenceReady} onClick={() => diagnoseMutation.mutate(scope)} type="button">
             <Play size={14} /> {diagnoseMutation.isPending ? "诊断中..." : `运行${scope === "inference" ? "推理" : "训练"}诊断`}
@@ -229,8 +229,8 @@ export function AIOpsPage() {
       />
 
       <div className="aiops-scope-switch" role="tablist" aria-label="诊断范围">
-        <button aria-selected={scope === "inference"} className={scope === "inference" ? "active" : ""} onClick={() => { setScope("inference"); update({ deliveryKind: "inference", trainingJobId: null }); }} role="tab" type="button"><Zap size={15} /> 推理优化诊断</button>
-        <button aria-selected={scope === "training"} className={scope === "training" ? "active" : ""} onClick={() => { setScope("training"); update({ deliveryKind: "training", benchmarkRunId: null, deploymentId: null }); }} role="tab" type="button"><GraduationCap size={15} /> 训练微调诊断</button>
+        <button aria-selected={scope === "inference"} className={scope === "inference" ? "active" : ""} onClick={() => { setScope("inference"); update({ deliveryKind: "inference", trainingJobId: null }); }} role="tab" type="button"><Zap size={15} /> 推理服务诊断</button>
+        <button aria-selected={scope === "training"} className={scope === "training" ? "active" : ""} onClick={() => { setScope("training"); update({ deliveryKind: "training", benchmarkRunId: null, deploymentId: null }); }} role="tab" type="button"><GraduationCap size={15} /> 训练任务诊断</button>
       </div>
 
       <div className="aiops-question-bar">

@@ -37,14 +37,14 @@ export function TrainingPage() {
   return (
     <section className="infra-page training-page">
       <PageHeader
-        title="训练微调控制面"
+        title="训练任务控制面"
         subtitle="Qwen3.5-4B 客服 LoRA 微调：数据准备 → PyTorchJob → 日志与 GPU 观测 → 版本自动归档"
         actions={
           <div className="training-actions">
             <button className="console-refresh" type="button" onClick={() => training.jobs.refetch()}>
               <RefreshCw className={training.jobs.isFetching ? "spinning" : undefined} size={14} /> 刷新
             </button>
-            <button className="console-refresh primary" disabled={inferenceBusy} title={inferenceBusy ? "请先在推理优化页停止 vLLM 服务" : "提交训练任务"} type="button" onClick={() => setSubmitting(true)}>
+            <button className="console-refresh primary" disabled={inferenceBusy} title={inferenceBusy ? "请先在推理服务页停止 vLLM 服务" : "提交训练任务"} type="button" onClick={() => setSubmitting(true)}>
               <Plus size={14} /> 提交训练
             </button>
           </div>

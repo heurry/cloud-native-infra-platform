@@ -41,26 +41,31 @@ export const pages: Page[] = [
   "settings"
 ];
 
+// 旧 AI 应用页面继续支持直链，但不再出现在基础设施平台的主导航和全局搜索中。
+export const navigationPages: Page[] = pages.filter(
+  (page) => !(["pipelines", "support", "evals", "feedback"] as Page[]).includes(page)
+);
+
 export const pageLabels: Record<Page, string> = {
   dashboard: "平台总览",
-  services: "服务与 Workload",
-  kubernetes: "Kubernetes",
+  services: "服务目录",
+  kubernetes: "集群与资源",
   config: "配置中心",
-  pipelines: "服务发布流水线",
-  observability: "可观测性",
-  aiOps: "AI Ops",
-  knowledge: "知识库 / RAG",
+  pipelines: "CI/CD 流水线",
+  observability: "可观测中心",
+  aiOps: "智能诊断",
+  knowledge: "诊断知识库",
   support: "智能客服",
   evals: "检索评测",
   feedback: "反馈回流",
-  benchmarks: "推理优化",
-  release: "发布中心",
+  benchmarks: "推理服务",
+  release: "发布中心 / CI/CD",
   datasets: "数据资产",
   models: "模型与版本",
-  routing: "模型路由",
+  routing: "流量策略",
   storage: "存储分层",
-  training: "训练微调",
-  settings: "平台设置"
+  training: "训练任务",
+  settings: "平台状态"
 };
 
 // Page <-> URL path 映射（react-router）。

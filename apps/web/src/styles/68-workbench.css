@@ -106,6 +106,40 @@
   gap: 12px;
 }
 
+.release-center-tabs {
+  align-items: center;
+  background: #e8eef7;
+  border: 1px solid #d6e0ed;
+  border-radius: 7px;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  width: max-content;
+}
+
+.release-center-tabs button {
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 32px;
+  padding: 0 16px;
+}
+
+.release-center-tabs button.active {
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 12%);
+  color: #1d4ed8;
+}
+
+.release-center-embedded {
+  display: grid;
+  gap: 10px;
+}
+
 .training-lane-banner {
   align-items: center;
   background: #f0fdf4;
@@ -721,6 +755,86 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+.release-config-heading {
+  align-items: flex-end;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.release-config-heading > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.release-config-heading strong { color: #0f172a; font-size: 12px; }
+.release-config-heading small, .release-config-note { color: #64748b; font-size: 10px; line-height: 1.45; margin: 0; }
+
+.release-template-actions, .release-config-mode, .release-yaml-editor > div {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.release-template-actions button, .release-config-mode button, .release-yaml-editor button {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #cfd8e5;
+  border-radius: 5px;
+  color: #475569;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 700;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 9px;
+}
+
+.release-config-mode {
+  border-bottom: 1px solid #e2e8f0;
+  gap: 2px;
+}
+
+.release-config-mode button { border: 0; border-radius: 5px 5px 0 0; min-height: 32px; }
+.release-config-mode button.active { background: #eff6ff; box-shadow: inset 0 -2px #2563eb; color: #1d4ed8; }
+
+.release-runtime-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.release-form .release-runtime-toggle {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  display: flex;
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+.release-form .release-runtime-toggle input { min-height: 14px; width: 14px; }
+
+.release-yaml-editor { display: grid; gap: 8px; }
+.release-yaml-editor textarea {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #dbeafe;
+  font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+  min-height: 310px;
+  padding: 12px;
+  resize: vertical;
+  tab-size: 2;
+  width: 100%;
+}
+
+.release-yaml-editor button.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+.release-yaml-error { color: #dc2626; font-size: 10px; margin: 0; }
+.release-yaml-pending { color: #b45309; font-size: 10px; margin: 0; }
+
 .release-evidence-strip {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -912,6 +1026,7 @@
   .delivery-flow button:nth-child(5), .delivery-flow button:nth-child(6) { border-top: 1px solid #e5eaf1; }
   .release-main-grid { grid-template-columns: 1fr; }
   .release-gates { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .release-runtime-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 760px) {
@@ -953,7 +1068,8 @@
   .inference-profile-strip, .benchmark-compare-grid { grid-template-columns: 1fr; }
   .inference-profile-strip > div + div { border-left: 0; border-top: 1px solid #edf1f5; }
   .asset-summary-strip > div + div { border-left: 0; border-top: 1px solid #e5eaf1; }
-  .asset-contract-grid, .release-gates, .release-field-grid { grid-template-columns: 1fr; }
+  .asset-contract-grid, .release-gates, .release-field-grid, .release-runtime-grid { grid-template-columns: 1fr; }
+  .release-config-heading { align-items: flex-start; flex-direction: column; }
   .delivery-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .delivery-flow button:nth-child(odd) { border-left: 0; }
   .delivery-flow button:nth-child(n+3) { border-top: 1px solid #e5eaf1; }

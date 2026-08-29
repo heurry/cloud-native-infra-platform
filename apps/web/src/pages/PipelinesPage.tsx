@@ -26,8 +26,7 @@ const RUNNING = "running";
 type CIRun = { id: number; name: string; display_title: string; status: string; conclusion: string | null; html_url: string; head_branch: string; created_at: string };
 type CIRunsResponse = { configured: boolean; provider: string; repository?: string; workflow?: string; message?: string; runs: CIRun[] };
 
-export function PipelinesPage() {
-  const goTo = useGoToPage();
+export function PipelinesPage({ embedded = false }: { embedded?: boolean }) {
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -104,14 +103,14 @@ export function PipelinesPage() {
   const pageRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   return (
-    <section className="infra-page pipelines-page pipeline-replica">
-      <PageHeader
-        title="服务发布流水线"
-        subtitle="通用微服务的 GitHub Actions 构建测试、Kubernetes 发布检查与真实回滚；模型运行时由发布中心管理"
+    <section className={embedded ? "pipelines-page pipeline-replica release-center-embedded" : "infra-page pipelines-page pipeline-replica"}>
+      {!embedded ? <PageHeader
+        title="CI/CD 流水线"
+        subtitle="通用微服务的源码构建、测试、镜像制品和 Kubernetes 发布；主入口已合并到发布中心"
         actions={
-          <><button className="console-refresh" onClick={() => goTo("release")} type="button">模型发布中心</button><button className="console-refresh primary" onClick={() => setCreating(true)} type="button"><Plus size={14} /> 新建服务流水线</button></>
+          <button className="console-refresh primary" onClick={() => setCreating(true)} type="button"><Plus size={14} /> 新建服务流水线</button>
         }
-      />
+      /> : null}
 
       <KpiGrid className="pipeline-kpi-strip" items={kpis} />
 

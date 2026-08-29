@@ -242,7 +242,7 @@ export function ObservabilityPage() {
   return (
     <section className="infra-page observability-page obs-replica">
       <PageHeader
-        title="可观测性"
+        title="可观测中心"
         subtitle="实时监控、指标分析、链路追踪与日志检索"
         actions={
           <button

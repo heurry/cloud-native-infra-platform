@@ -86,7 +86,9 @@ export type DeploymentMeta = {
 	model_id?: string;
 	model_version_id?: string;
 	endpoint_id?: string;
-	release_profile?: "balanced" | "high_throughput";
+	release_profile?: string;
+	runtime_request?: Record<string, unknown>;
+	release_spec?: string;
 	benchmark_run_id?: string;
 	benchmark_report?: string;
 	previous_release_id?: string;
