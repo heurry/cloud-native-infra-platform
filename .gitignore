@@ -36,6 +36,7 @@ logs/seqs*.log
 errortxt
 知识积累.md
 deploy/compose/.secrets/
+deploy/compose/gitlab.env
 /*.png
 /分析报告*.md
 /思路.md
